@@ -42,6 +42,15 @@ jobs:
           wget -q https://gist.githubusercontent.com/maxwelleite/10774746/raw/ttf-vista-fonts-installer.sh -O - | sudo bash
           sudo fc-cache -f
 
+      - name: Verify fonts
+        run: |
+          echo "=== Times New Roman variants ==="
+          fc-list | grep -i "times new roman" || echo "NOT FOUND"
+          echo "=== Calibri variants ==="
+          fc-list | grep -i "calibri" || echo "NOT FOUND"
+          echo "=== Courier New variants ==="
+          fc-list | grep -i "courier" || echo "NOT FOUND"
+
       - name: Install dependencies
         run: poetry install --no-interaction
 

@@ -10,23 +10,28 @@ def __find_font_linux(name: str, bold: bool, italic: bool):
         stderr=subprocess.PIPE, text=True)
 
     if result.returncode == 0:
-        fonts = \
-            [line.split(":") for line in result.stdout.strip().split("\n")]
-        fonts = [font for font in fonts if len(font) == 3]
+        # Split each line into at most 3 parts: path, names, styles.
+        # Using maxsplit=2 prevents lines with locale-specific extra
+        # colon-separated fields (e.g. "lang=en|ru") from being discarded
+        # by the old `len(font) == 3` check.
+        raw = [line.split(":", 2) for line in result.stdout.strip().split("\n")]
+        fonts = [font for font in raw if len(font) >= 2]
     else:
         logging.log(logging.ERROR, "fc-list not found")
         exit(1)
 
     def match_font(target_names: list[str], strict_style: bool):
-        for path, names, styles in fonts:
+        for fields in fonts:
+            path, names = fields[0], fields[1]
+            styles = fields[2] if len(fields) > 2 else ""
             if not any(target in names for target in target_names):
                 continue
             if strict_style:
-                if (("Bold" in styles) == bool(bold)
-                        and ("Italic" in styles) == bool(italic)):
-                    return path
+                if (('Bold' in styles) == bool(bold)
+                        and ('Italic' in styles) == bool(italic)):
+                    return path.strip()
             else:
-                return path
+                return path.strip()
         return None
 
     aliases = {

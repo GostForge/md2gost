@@ -29,6 +29,14 @@ jobs:
         python -m pip install --upgrade pip
         pip install flake8 pytest
         pip install .
+    - name: Verify fonts
+      run: |
+        echo "=== Times New Roman variants ==="
+        fc-list | grep -i "times new roman" || echo "NOT FOUND"
+        echo "=== Calibri variants ==="
+        fc-list | grep -i "calibri" || echo "NOT FOUND"
+        echo "=== Courier New variants ==="
+        fc-list | grep -i "courier" || echo "NOT FOUND"
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
