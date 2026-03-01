@@ -17,11 +17,44 @@ def __find_font_linux(name: str, bold: bool, italic: bool):
         logging.log(logging.ERROR, "fc-list not found")
         exit(1)
 
-    for path, names, styles in fonts:
-        if (name in names
-                and ("Bold" in styles) == bool(bold)
-                and ("Italic" in styles) == bool(italic)):
-            return path
+    def match_font(target_names: list[str], strict_style: bool):
+        for path, names, styles in fonts:
+            if not any(target in names for target in target_names):
+                continue
+            if strict_style:
+                if (("Bold" in styles) == bool(bold)
+                        and ("Italic" in styles) == bool(italic)):
+                    return path
+            else:
+                return path
+        return None
+
+    aliases = {
+        "Times New Roman": ["Times New Roman", "Times", "Liberation Serif", "DejaVu Serif"],
+        "Calibri": ["Calibri", "Carlito", "Liberation Sans", "DejaVu Sans"],
+        "Arial": ["Arial", "Liberation Sans", "DejaVu Sans"],
+        "Courier New": ["Courier New", "Liberation Mono", "DejaVu Sans Mono"],
+    }
+
+    candidates = aliases.get(name, [name, "DejaVu Serif", "DejaVu Sans"])
+
+    # 1) strict by style
+    path = match_font(candidates, strict_style=True)
+    if path:
+        return path
+
+    # 2) relax style requirements
+    path = match_font(candidates, strict_style=False)
+    if path:
+        logging.warning("Font '%s' style variant not found, using closest match", name)
+        return path
+
+    # 3) final fallback to any common default
+    path = match_font(["DejaVu Serif", "DejaVu Sans", "Liberation Serif", "Liberation Sans"], strict_style=False)
+    if path:
+        logging.warning("Font '%s' not found, fallback font selected", name)
+        return path
+
     raise ValueError(f"Font {name} not found")
 
 

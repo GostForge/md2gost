@@ -1,9 +1,12 @@
 import logging
+import ipaddress
+import socket
 from copy import copy
 from io import BytesIO
 from typing import Generator
 from os import environ
 import os.path
+from urllib.parse import urlparse
 
 import requests
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
@@ -16,6 +19,28 @@ from .requires_numbering import RequiresNumbering
 from ..layout_tracker import LayoutState
 from ..rendered_info import RenderedInfo
 from ..util import create_element
+from ..warnings_collector import add_warning
+
+_BLOCKED_SCHEMES = {"file", "ftp", "gopher", "data"}
+
+
+def _is_safe_url(url: str) -> bool:
+    """Reject URLs targeting private/internal addresses (SSRF protection)."""
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme.lower() in _BLOCKED_SCHEMES:
+            return False
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+        # Resolve DNS and check all IPs
+        for info in socket.getaddrinfo(hostname, None):
+            addr = ipaddress.ip_address(info[4][0])
+            if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
+                return False
+        return True
+    except Exception:
+        return False
 
 
 class Image(Renderable, RequiresNumbering):
@@ -34,14 +59,22 @@ class Image(Renderable, RequiresNumbering):
         run = self._docx_paragraph.add_run()
 
         if path.startswith("http"):
-            bytesio = BytesIO()
-            bytesio.write(requests.get(path).content)
-            self._image = run.add_picture(bytesio)
+            if not _is_safe_url(path):
+                msg = f"SSRF-блокировка: URL {path} указывает на внутренний адрес"
+                logging.warning(msg)
+                add_warning(msg)
+                self._invalid = True
+            else:
+                bytesio = BytesIO()
+                bytesio.write(requests.get(path, timeout=15).content)
+                self._image = run.add_picture(bytesio)
         else:
             try:
                 self._image = run.add_picture(path)
             except FileNotFoundError:
-                logging.warning(f"Путь {path} не существует, картинка не будет добавлена")
+                msg = f"Путь {path} не существует, картинка не будет добавлена"
+                logging.warning(msg)
+                add_warning(msg)
                 self._invalid = True
 
         self._number = None

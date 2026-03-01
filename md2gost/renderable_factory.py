@@ -10,6 +10,7 @@ from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from .renderable import *
 from .renderable import Renderable
 from . import extended_markdown
+from .warnings_collector import add_warning
 
 
 class RenderableFactory:
@@ -19,9 +20,11 @@ class RenderableFactory:
     @singledispatchmethod
     def create(self, marko_element: extended_markdown.BlockElement,
                caption_info: CaptionInfo) -> Generator[Renderable, None, None]:
+        msg = f"{marko_element.get_type()} не поддерживается"
         paragraph = Paragraph(self._parent)
-        paragraph.add_run(f"{marko_element.get_type()} не поддерживается", color=RGBColor.from_string('ff0000'))
-        logging.warning(f"{marko_element.get_type()} не поддерживается")
+        paragraph.add_run(msg, color=RGBColor.from_string('ff0000'))
+        logging.warning(msg)
+        add_warning(msg)
         yield paragraph
 
     @staticmethod
@@ -50,9 +53,11 @@ class RenderableFactory:
                 RenderableFactory._create_runs(paragraph_or_link,
                                                child.children, classes + [type(child)])
             else:
-                paragraph_or_link.add_run(f" {child.get_type()} не поддерживается ",
+                msg = f"{child.get_type()} не поддерживается"
+                paragraph_or_link.add_run(f" {msg} ",
                                           color=RGBColor.from_string("FF0000"))
-                logging.warning(f"{child.get_type()} не поддерживается")
+                logging.warning(msg)
+                add_warning(msg)
 
     @create.register
     def _(self, marko_paragraph: extended_markdown.Paragraph, caption_info: CaptionInfo):
@@ -87,7 +92,9 @@ class RenderableFactory:
                 with open(marko_code_block.extra, encoding="utf-8") as f:
                     text = f.read() + text
             except FileNotFoundError:
-                logging.warning(f"Файл с кодом не найден: {marko_code_block.extra}")
+                msg = f"Файл с кодом не найден: {marko_code_block.extra}"
+                logging.warning(msg)
+                add_warning(msg)
 
         listing.set_text(text)
         yield listing

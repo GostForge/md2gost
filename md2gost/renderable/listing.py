@@ -19,6 +19,7 @@ from .requires_numbering import RequiresNumbering
 from ..docx_elements import create_table
 from ..layout_tracker import LayoutState
 from ..rendered_info import RenderedInfo
+from ..warnings_collector import add_warning
 
 
 class DocxParagraphPygmentsFormatter(Formatter):
@@ -84,7 +85,9 @@ class Listing(Renderable, RequiresNumbering):
                 highlight(text, get_lexer_by_name(self._language), formatter)
                 return
             except ClassNotFound:
-                logging.warning(f"Язык {self._language} не поддерживается, синтаксис не будет подсвечен")
+                msg = f"Язык {self._language} не поддерживается, синтаксис не будет подсвечен"
+                logging.warning(msg)
+                add_warning(msg)
 
         for line in text.removesuffix("\n").split("\n"):
             paragraph = create_paragraph()

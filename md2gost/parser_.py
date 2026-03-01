@@ -1,3 +1,4 @@
+import logging
 import os
 from collections.abc import Generator
 
@@ -11,6 +12,8 @@ from .renderable.caption import CaptionInfo
 from .renderable.renderable import Renderable
 from .renderable_factory import RenderableFactory
 
+logger = logging.getLogger(__name__)
+
 
 class Parser:
     """Parses given markdown string and returns Renderable elements"""
@@ -22,18 +25,43 @@ class Parser:
         self._caption_info: CaptionInfo | None = None
 
     @staticmethod
+    def _safe_resolve(base_dir: str, relative_path: str) -> str | None:
+        """Resolve *relative_path* inside *base_dir*.
+
+        Returns the resolved absolute path if it stays within *base_dir*,
+        or ``None`` if the path attempts to escape (path-traversal).
+        ``~`` (home-dir expansion) is intentionally NOT applied.
+        """
+        # Strip leading slashes so os.path.join cannot ignore base_dir
+        cleaned = relative_path.lstrip("/").lstrip("\\")
+        resolved = os.path.normpath(os.path.join(base_dir, cleaned))
+        base = os.path.normpath(base_dir)
+        if not (resolved == base or resolved.startswith(base + os.sep)):
+            logger.warning(
+                "Path traversal blocked: '%s' resolved to '%s' (base: %s)",
+                relative_path, resolved, base,
+            )
+            return None
+        return resolved
+
+    @staticmethod
     def resolve_paths(marko_element: BlockElement, relative_dir_path: str):
-        """Resolves relative paths in Marko elements"""
+        """Resolves relative paths in Marko elements (with traversal protection)."""
         if isinstance(marko_element, Paragraph):
             for child in marko_element.children:
-                if isinstance(child, Image) and not child.dest.startswith(
-                        "http"):
-                    child.dest = os.path.join(
-                        relative_dir_path, os.path.expanduser(child.dest))
-        if isinstance(marko_element,
-                      (CodeBlock, FencedCode)) and marko_element.extra:
-            marko_element.extra = os.path.join(
-                relative_dir_path, os.path.expanduser(marko_element.extra))
+                if isinstance(child, Image) and not child.dest.startswith("http"):
+                    safe = Parser._safe_resolve(relative_dir_path, child.dest)
+                    if safe is not None:
+                        child.dest = safe
+                    else:
+                        # Replace with obviously-invalid path so FileNotFoundError is raised later
+                        child.dest = "__blocked_path_traversal__"
+        if isinstance(marko_element, (CodeBlock, FencedCode)) and marko_element.extra:
+            safe = Parser._safe_resolve(relative_dir_path, marko_element.extra)
+            if safe is not None:
+                marko_element.extra = safe
+            else:
+                marko_element.extra = "__blocked_path_traversal__"
 
     def parse(self, text, relative_dir_path: str) -> None:
         marko_parsed = markdown.parse(text)
