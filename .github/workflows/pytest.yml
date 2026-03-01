@@ -22,10 +22,10 @@ jobs:
     - name: Install dependencies
       run: |
         echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true | sudo debconf-set-selections
-        sudo apt-get install ttf-mscorefonts-installer
-        sudo apt-get install fontforge
-        sudo apt-get install cabextract
-        wget https://gist.githubusercontent.com/maxwelleite/10774746/raw/ttf-vista-fonts-installer.sh -q -O - | sudo bash
+        sudo apt-get update -qq
+        sudo apt-get install -y --no-install-recommends ttf-mscorefonts-installer fontforge cabextract
+        wget -q https://gist.githubusercontent.com/maxwelleite/10774746/raw/ttf-vista-fonts-installer.sh -O - | sudo bash
+        sudo fc-cache -f
         python -m pip install --upgrade pip
         pip install flake8 pytest
         pip install .
