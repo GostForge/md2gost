@@ -7,6 +7,7 @@ Provides REST API for Markdown → DOCX conversion with optional callback suppor
 import json
 import logging
 import os
+import struct
 import tempfile
 import uuid
 from contextlib import asynccontextmanager
@@ -145,14 +146,14 @@ async def convert_sync(
         with open(output_path, "rb") as f:
             docx_bytes = f.read()
 
-        headers = {"Content-Disposition": 'attachment; filename="result.docx"'}
-        if warnings:
-            headers["X-Conversion-Warnings"] = json.dumps(warnings, ensure_ascii=True)
+        # Binary framing: [4 bytes: warnings JSON length (big-endian uint32)][warnings JSON bytes][DOCX bytes]
+        warnings_json = json.dumps(warnings, ensure_ascii=False).encode("utf-8")
+        body = struct.pack(">I", len(warnings_json)) + warnings_json + docx_bytes
 
         return Response(
-            content=docx_bytes,
-            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            headers=headers,
+            content=body,
+            media_type="application/octet-stream",
+            headers={"Content-Disposition": 'attachment; filename="result.bin"'},
         )
 
 

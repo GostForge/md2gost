@@ -5,62 +5,72 @@ from functools import cache
 
 
 def __find_font_linux(name: str, bold: bool, italic: bool):
-    result = subprocess.run(
-        "fc-list", shell=True, check=True, stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE, text=True)
+    """
+    Use fc-match to resolve a font path for the given family/style.
+    fc-match handles all the fontconfig alias/fallback logic natively,
+    so we don't need to parse fc-list output manually.
+    """
+    weight = "bold" if bold else "regular"
+    slant  = "italic" if italic else "roman"
 
-    if result.returncode == 0:
-        # Split each line into at most 3 parts: path, names, styles.
-        # Using maxsplit=2 prevents lines with locale-specific extra
-        # colon-separated fields (e.g. "lang=en|ru") from being discarded
-        # by the old `len(font) == 3` check.
-        raw = [line.split(":", 2) for line in result.stdout.strip().split("\n")]
-        fonts = [font for font in raw if len(font) >= 2]
-    else:
-        logging.log(logging.ERROR, "fc-list not found")
-        exit(1)
-
-    def match_font(target_names: list[str], strict_style: bool):
-        for fields in fonts:
-            path, names = fields[0], fields[1]
-            styles = fields[2] if len(fields) > 2 else ""
-            if not any(target in names for target in target_names):
-                continue
-            if strict_style:
-                if (('Bold' in styles) == bool(bold)
-                        and ('Italic' in styles) == bool(italic)):
-                    return path.strip()
-            else:
-                return path.strip()
-        return None
-
+    # Try the exact requested family first, then fallback aliases.
     aliases = {
-        "Times New Roman": ["Times New Roman", "Times", "Liberation Serif", "DejaVu Serif"],
-        "Calibri": ["Calibri", "Carlito", "Liberation Sans", "DejaVu Sans"],
-        "Arial": ["Arial", "Liberation Sans", "DejaVu Sans"],
-        "Courier New": ["Courier New", "Liberation Mono", "DejaVu Sans Mono"],
+        "Times New Roman": ["Times New Roman", "Liberation Serif"],
+        "Calibri":         ["Calibri", "Carlito"],
+        "Arial":           ["Arial", "Liberation Sans"],
+        "Courier New":     ["Courier New", "Liberation Mono"],
+        "Consolas":        ["Consolas", "Liberation Mono", "Courier New"],
     }
+    candidates = aliases.get(name, [name])
 
-    candidates = aliases.get(name, [name, "DejaVu Serif", "DejaVu Sans"])
+    for candidate in candidates:
+        pattern = f"{candidate}:weight={weight}:slant={slant}"
+        try:
+            result = subprocess.run(
+                ["fc-match", "--format=%{file}\\n%{family}\\n%{weight}\\n%{slant}", pattern],
+                check=True, capture_output=True, text=True,
+            )
+            lines = result.stdout.strip().splitlines()
+            if not lines:
+                continue
+            path = lines[0].strip()
+            if not path:
+                continue
 
-    # 1) strict by style
-    path = match_font(candidates, strict_style=True)
-    if path:
-        return path
+            # Sanity-check: make sure fontconfig actually gave us the right
+            # family (it may silently fall back to a totally different font).
+            resolved_family = lines[1].strip() if len(lines) > 1 else ""
+            # Accept if any word of the requested name appears in the resolved family
+            name_words = name.lower().split()
+            if not any(w in resolved_family.lower() for w in name_words):
+                logging.debug(
+                    "fc-match returned '%s' for '%s' — skipping (family mismatch)",
+                    resolved_family, candidate,
+                )
+                continue
 
-    # 2) relax style requirements
-    path = match_font(candidates, strict_style=False)
-    if path:
-        logging.warning("Font '%s' style variant not found, using closest match", name)
-        return path
+            logging.debug("find_font('%s', bold=%s, italic=%s) → %s", name, bold, italic, path)
+            return path
 
-    # 3) final fallback to any common default
-    path = match_font(["DejaVu Serif", "DejaVu Sans", "Liberation Serif", "Liberation Sans"], strict_style=False)
-    if path:
-        logging.warning("Font '%s' not found, fallback font selected", name)
-        return path
+        except subprocess.CalledProcessError as exc:
+            logging.warning("fc-match failed for '%s': %s", pattern, exc)
+            continue
 
-    raise ValueError(f"Font {name} not found")
+    # Hard fallback — pick any monospace or serif font
+    fallback_pattern = "mono" if name in ("Courier New", "Consolas") else "serif"
+    try:
+        result = subprocess.run(
+            ["fc-match", "--format=%{file}", fallback_pattern],
+            check=True, capture_output=True, text=True,
+        )
+        path = result.stdout.strip()
+        if path:
+            logging.warning("Font '%s' not found, using system fallback: %s", name, path)
+            return path
+    except subprocess.CalledProcessError:
+        pass
+
+    raise ValueError(f"Font '{name}' not found on this system")
 
 
 @cache
