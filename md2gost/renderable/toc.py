@@ -7,6 +7,7 @@ from docx.text.run import Run
 
 from . import Paragraph
 from .renderable import Renderable
+from ..constants import TOC_ENTRY_SPACE_AFTER
 from ..layout_tracker import LayoutState
 from ..rendered_info import RenderedInfo
 from ..util import create_element
@@ -56,7 +57,7 @@ class ToC(Renderable):
         paragraph._docx_paragraph.paragraph_format.tab_stops.add_tab_stop(0, alignment=WD_TAB_ALIGNMENT.LEFT,
                                                           leader=WD_TAB_LEADER.SPACES)
         paragraph._docx_paragraph.paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
-        paragraph._docx_paragraph.paragraph_format.space_after = Cm(0.18)
+        paragraph._docx_paragraph.paragraph_format.space_after = TOC_ENTRY_SPACE_AFTER
         paragraph.first_line_indent = 0
 
         hyperlink = paragraph.add_link_anchor(anchor, None)

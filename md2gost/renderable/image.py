@@ -20,6 +20,7 @@ from ..layout_tracker import LayoutState
 from ..rendered_info import RenderedInfo
 from ..util import create_element
 from ..warnings_collector import add_warning
+from ..constants import IMAGE_CAPTION_CATEGORY, IMAGE_RESIZE_THRESHOLD
 
 _BLOCKED_SCHEMES = {"file", "ftp", "gopher", "data"}
 
@@ -45,7 +46,7 @@ def _is_safe_url(url: str) -> bool:
 
 class Image(Renderable, RequiresNumbering):
     def __init__(self, parent: Parented, path: str, caption_info: CaptionInfo | None = None):
-        super().__init__("Рисунок", caption_info.unique_name if caption_info else None)
+        super().__init__(IMAGE_CAPTION_CATEGORY, caption_info.unique_name if caption_info else None)
         self._parent = parent
         self._caption_info = caption_info
         self._docx_paragraph = Paragraph(create_element("w:p"), parent)
@@ -111,14 +112,14 @@ class Image(Renderable, RequiresNumbering):
 
         height = self._image.height
 
-        caption = Caption(self._parent, "Рисунок", self._caption_info, self._number, False)
+        caption = Caption(self._parent, IMAGE_CAPTION_CATEGORY, self._caption_info, self._number, False)
         caption.center()
 
         caption_rendered_infos = list(caption.render(None, copy(layout_state)))
         caption_height = sum([info.height for info in caption_rendered_infos])
 
         if height + caption_height > layout_state.remaining_page_height:
-            if height * 0.7 <= (layout_state.remaining_page_height - caption_height):
+            if height * IMAGE_RESIZE_THRESHOLD <= (layout_state.remaining_page_height - caption_height):
                 self.resize(height=layout_state.remaining_page_height - caption_height)
                 height = layout_state.remaining_page_height - caption_height
             else:

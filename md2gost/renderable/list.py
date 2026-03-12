@@ -5,11 +5,15 @@ from docx.shared import Pt, Cm, Twips
 
 from . import Paragraph
 from .renderable import Renderable
+from ..constants import (
+    LIST_LEVEL_INDENT as LEVEL_INDENT,
+    LIST_MARKER_INDENT,
+    LIST_TAB_STOP,
+    LIST_MARKER_UNORDERED,
+    STYLE_NORMAL,
+)
 from ..layout_tracker import LayoutState
 from ..rendered_info import RenderedInfo
-
-
-LEVEL_INDENT = Twips(425)
 
 
 class List(Renderable):
@@ -27,15 +31,15 @@ class List(Renderable):
             self._numbering[i] = 0
 
         paragraph = Paragraph(self._parent)
-        paragraph.add_run((f"{self._numbering[level-1]}." if self._ordered else "●")+"\t")
+        paragraph.add_run((f"{self._numbering[level-1]}." if self._ordered else LIST_MARKER_UNORDERED)+"\t")
 
         # first level indent is a first_line_indent of normal text
-        first_indent = self._parent.part.styles["Normal"].paragraph_format.first_line_indent
+        first_indent = self._parent.part.styles[STYLE_NORMAL].paragraph_format.first_line_indent
 
         # idk how it works but it works
-        paragraph._docx_paragraph.paragraph_format.tab_stops.add_tab_stop(Twips(360))
-        paragraph._docx_paragraph.paragraph_format.left_indent = (Twips(425) + (first_indent or 0) + LEVEL_INDENT*(level-1))
-        paragraph._docx_paragraph.paragraph_format.first_line_indent = -Twips(425)
+        paragraph._docx_paragraph.paragraph_format.tab_stops.add_tab_stop(LIST_TAB_STOP)
+        paragraph._docx_paragraph.paragraph_format.left_indent = (LIST_MARKER_INDENT + (first_indent or 0) + LEVEL_INDENT*(level-1))
+        paragraph._docx_paragraph.paragraph_format.first_line_indent = -LIST_MARKER_INDENT
 
         self._last_paragraph_space_after = paragraph._docx_paragraph.paragraph_format.space_after
         paragraph._docx_paragraph.paragraph_format.space_before = 0

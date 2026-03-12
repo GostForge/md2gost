@@ -13,6 +13,7 @@ from .renderable import Renderable
 from ..rendered_info import RenderedInfo
 from .paragraph_sizer import ParagraphSizer
 from ..util import create_element
+from ..constants import STYLE_CAPTION, CAPTION_SEPARATOR, SPACE_BEFORE_CAPTION_AFTER_TABLE
 
 
 @dataclass
@@ -30,7 +31,7 @@ class Caption(Renderable):
 
         uid = uuid4().hex
 
-        self._docx_paragraph.style = "Caption"
+        self._docx_paragraph.style = STYLE_CAPTION
         self._docx_paragraph.add_run(f"{category} ")
         if caption_info and caption_info.unique_name:
             self._docx_paragraph._p.append(create_element("w:bookmarkStart", {
@@ -46,7 +47,7 @@ class Caption(Renderable):
                 "w:id": uid
             }))
         if caption_info and caption_info.text:
-            self._docx_paragraph.add_run(f" - {caption_info.text}")
+            self._docx_paragraph.add_run(f"{CAPTION_SEPARATOR}{caption_info.text}")
 
     def center(self):
         self._docx_paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
@@ -55,7 +56,7 @@ class Caption(Renderable):
             "RenderedInfo | Renderable", None, None]:
         if previous_rendered and isinstance(previous_rendered.docx_element, Table) \
                 and not (layout_state.current_page_height == 0 and layout_state.page != 1):
-            self._docx_paragraph.paragraph_format.space_before = Cm(0.45)
+            self._docx_paragraph.paragraph_format.space_before = SPACE_BEFORE_CAPTION_AFTER_TABLE
         else:
             self._docx_paragraph.paragraph_format.space_before = None
 

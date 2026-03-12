@@ -4,6 +4,7 @@ from docx.shared import Parented, Pt
 from docx.text.paragraph import Paragraph as DocxParagraph
 
 from .paragraph_sizer import ParagraphSizer
+from ..constants import PAGE_BREAK_FONT_SIZE
 from ..layout_tracker import LayoutState
 from ..rendered_info import RenderedInfo
 from ..util import create_element
@@ -17,7 +18,7 @@ class PageBreak(Renderable):
                 create_element("w:br", {"w:type": "page"})
             ])
         ]), parent)
-        self._docx_paragraph.runs[0].font.size = Pt(1)
+        self._docx_paragraph.runs[0].font.size = PAGE_BREAK_FONT_SIZE
         self._docx_paragraph.paragraph_format.space_before = 0
         self._docx_paragraph.paragraph_format.space_after = 0
 

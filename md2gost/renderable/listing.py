@@ -20,6 +20,15 @@ from ..docx_elements import create_table
 from ..layout_tracker import LayoutState
 from ..rendered_info import RenderedInfo
 from ..warnings_collector import add_warning
+from ..constants import (
+    LISTING_OFFSET,
+    LISTING_CAPTION_CATEGORY,
+    LISTING_CONTINUATION_PREFIX,
+    LISTING_BORDER_HEIGHT,
+    STYLE_CAPTION,
+    STYLE_CODE,
+    STYLE_NORMAL_TABLE,
+)
 
 
 class DocxParagraphPygmentsFormatter(Formatter):
@@ -48,12 +57,9 @@ class DocxParagraphPygmentsFormatter(Formatter):
         self._paragraphs.pop(-1)  # remove last empty line
 
 
-LISTING_OFFSET = Pt(14)
-
-
 class Listing(Renderable, RequiresNumbering):
     def __init__(self, parent, language: str, caption_info: CaptionInfo):
-        super().__init__("Листинг", caption_info.unique_name if caption_info else None)
+        super().__init__(LISTING_CAPTION_CATEGORY, caption_info.unique_name if caption_info else None)
         self._caption_info = caption_info
         self._language = language
         self._parent = parent
@@ -63,10 +69,10 @@ class Listing(Renderable, RequiresNumbering):
     def _create_table(self, parent, width: Length):
         # todo: style inheritance
         left_margin = Twips(int(
-            parent.part.styles["Normal Table"]._element.xpath("w:tblPr/w:tblCellMar/w:left")[0].attrib[
+            parent.part.styles[STYLE_NORMAL_TABLE]._element.xpath("w:tblPr/w:tblCellMar/w:left")[0].attrib[
                 "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}w"]))
         right_margin = Twips(int(
-            parent.part.styles["Normal Table"]._element.xpath("w:tblPr/w:tblCellMar/w:right")[0].attrib[
+            parent.part.styles[STYLE_NORMAL_TABLE]._element.xpath("w:tblPr/w:tblCellMar/w:right")[0].attrib[
                 "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}w"]))
 
         return create_table(parent, 1, 1, width + left_margin + right_margin)
@@ -74,7 +80,7 @@ class Listing(Renderable, RequiresNumbering):
     def set_text(self, text: str):
         def create_paragraph() -> Paragraph:
             paragraph = Paragraph(self._parent)
-            paragraph.style = "Code"
+            paragraph.style = STYLE_CODE
             return paragraph
 
         text = text.removesuffix("\n")
@@ -100,7 +106,7 @@ class Listing(Renderable, RequiresNumbering):
     def render(self, previous_rendered: RenderedInfo, layout_state: LayoutState)\
             -> Generator[RenderedInfo | Renderable, None, None]:
         caption_rendered_infos = list(
-            Caption(self._parent, "Листинг", self._caption_info, self._number, True)
+            Caption(self._parent, LISTING_CAPTION_CATEGORY, self._caption_info, self._number, True)
             .render(previous_rendered, copy(layout_state))
         )
         layout_state.add_height(sum([info.height for info in caption_rendered_infos]))
@@ -109,7 +115,7 @@ class Listing(Renderable, RequiresNumbering):
         table = self._create_table(self._parent, layout_state.max_width)
         previous = None
 
-        table_height = Pt(1)  # table borders, 4 eights of point for each border
+        table_height = LISTING_BORDER_HEIGHT  # table borders, 4 eights of point for each border
 
         # if first line doesn't fit move listing to the next page
         paragraph_layout_state = copy(layout_state)
@@ -128,11 +134,11 @@ class Listing(Renderable, RequiresNumbering):
                 table_rendered_info = RenderedInfo(table, table_height)
                 yield table_rendered_info
 
-                table_height = Pt(1)  # table borders, 4 eights of point for each border
+                table_height = LISTING_BORDER_HEIGHT  # table borders, 4 eights of point for each border
 
                 continuation_paragraph = Paragraph(self._parent)
-                continuation_paragraph.add_run(f"Продолжение листинга {self._number}")
-                continuation_paragraph.style = "Caption"
+                continuation_paragraph.add_run(f"{LISTING_CONTINUATION_PREFIX} {self._number}")
+                continuation_paragraph.style = STYLE_CAPTION
                 continuation_paragraph.first_line_indent = 0
                 continuation_paragraph.page_break_before = True
 

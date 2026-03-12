@@ -7,16 +7,23 @@ from . import Paragraph
 from .caption import Caption, CaptionInfo
 from .renderable import Renderable
 from .requires_numbering import RequiresNumbering
+from ..constants import (
+    TABLE_CELL_OFFSET as CELL_OFFSET,
+    TABLE_BORDER_HEIGHT,
+    TABLE_CAPTION_CATEGORY,
+    TABLE_CONTINUATION_PREFIX,
+    STYLE_CAPTION,
+    STYLE_NORMAL_TABLE,
+    SPACE_AFTER_TABLE,
+)
 from ..docx_elements import *
 from ..layout_tracker import LayoutState
 from ..rendered_info import RenderedInfo
 
-CELL_OFFSET = Pt(10)
-
 
 class Table(Renderable, RequiresNumbering):
     def __init__(self, parent: Parented, rows: int, cols: int, caption_info: CaptionInfo):
-        super().__init__("Таблица", caption_info.unique_name if caption_info else None)
+        super().__init__(TABLE_CAPTION_CATEGORY, caption_info.unique_name if caption_info else None)
         self._parent = parent
         self._caption_info = caption_info
         self._cols = cols
@@ -24,8 +31,8 @@ class Table(Renderable, RequiresNumbering):
         sect = parent.part.document.sections[-1]
 
         # todo: style inheritance
-        left_margin = Twips(int(parent.part.styles["Normal Table"]._element.xpath("w:tblPr/w:tblCellMar/w:left")[0].attrib["{http://schemas.openxmlformats.org/wordprocessingml/2006/main}w"]))
-        right_margin = Twips(int(parent.part.styles["Normal Table"]._element.xpath("w:tblPr/w:tblCellMar/w:right")[0].attrib["{http://schemas.openxmlformats.org/wordprocessingml/2006/main}w"]))
+        left_margin = Twips(int(parent.part.styles[STYLE_NORMAL_TABLE]._element.xpath("w:tblPr/w:tblCellMar/w:left")[0].attrib["{http://schemas.openxmlformats.org/wordprocessingml/2006/main}w"]))
+        right_margin = Twips(int(parent.part.styles[STYLE_NORMAL_TABLE]._element.xpath("w:tblPr/w:tblCellMar/w:right")[0].attrib["{http://schemas.openxmlformats.org/wordprocessingml/2006/main}w"]))
 
         self._table_width = sect.page_width - sect.left_margin - sect.right_margin + left_margin + right_margin
         self._number = "?"
@@ -47,7 +54,7 @@ class Table(Renderable, RequiresNumbering):
     def render(self, previous_rendered: RenderedInfo, layout_state: LayoutState)\
             -> Generator[RenderedInfo | Renderable, None, None]:
         caption_rendered_infos = list(
-            Caption(self._parent, "Таблица", self._caption_info, self._number, True)
+            Caption(self._parent, TABLE_CAPTION_CATEGORY, self._caption_info, self._number, True)
             .render(previous_rendered, copy(layout_state))
         )
         layout_state.add_height(sum([info.height for info in caption_rendered_infos]))
@@ -55,7 +62,7 @@ class Table(Renderable, RequiresNumbering):
 
         docx_table = create_table(self._parent, 0, self._cols, self._table_width)
 
-        table_height = Pt(0.5)  # top border
+        table_height = TABLE_BORDER_HEIGHT  # top border
 
         for row in self._rows:
             docx_row = create_table_row(docx_table)
@@ -74,17 +81,17 @@ class Table(Renderable, RequiresNumbering):
                     row_height = max(cell_height, row_height)
                 docx_row._element.append(docx_cell._element)
 
-            row_height += Pt(0.5)  # bottom row border
+            row_height += TABLE_BORDER_HEIGHT  # bottom row border
 
             if row_height > layout_state.remaining_page_height:
                 table_rendered_info = RenderedInfo(docx_table, table_height)
                 yield table_rendered_info
 
-                table_height = Pt(0.5)  # top border
+                table_height = TABLE_BORDER_HEIGHT  # top border
 
                 continuation_paragraph = Paragraph(self._parent)
-                continuation_paragraph.add_run(f"Продолжение таблицы {self._number}")
-                continuation_paragraph.style = "Caption"
+                continuation_paragraph.add_run(f"{TABLE_CONTINUATION_PREFIX} {self._number}")
+                continuation_paragraph.style = STYLE_CAPTION
                 continuation_paragraph.first_line_indent = 0
                 continuation_paragraph.page_break_before = True
 

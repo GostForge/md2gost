@@ -11,6 +11,7 @@ from docx.oxml.shared import qn
 
 from . import Renderable
 from .paragraph_sizer import ParagraphSizer
+from ..constants import STYLE_NORMAL, STYLE_HYPERLINK, SPACE_AFTER_TABLE
 from ..docx_elements import create_field
 from ..layout_tracker import LayoutState
 from ..util import create_element
@@ -72,7 +73,7 @@ class Paragraph(Renderable):
     def __init__(self, parent: Parented):
         self._parent = parent
         self._docx_paragraph = DocxParagraph(create_element("w:p"), parent)
-        self._docx_paragraph.style = "Normal"
+        self._docx_paragraph.style = STYLE_NORMAL
         self._references: list[Reference] = []
 
     def add_run(self, text: str, is_bold: bool = None, is_italic: bool = None, color: RGBColor = None,
@@ -97,13 +98,13 @@ class Paragraph(Renderable):
         self._references.append(Reference(unique_name))
         self._docx_paragraph._p.append(self._references[-1].element())
 
-    def add_link_url(self, url: str, style="Hyperlink"):
+    def add_link_url(self, url: str, style=STYLE_HYPERLINK):
         link = Link(self._docx_paragraph, style)
         link.set_url(url)
         self._docx_paragraph._p.append(link.element)
         return link
 
-    def add_link_anchor(self, anchor: str, style="Hyperlink"):
+    def add_link_anchor(self, anchor: str, style=STYLE_HYPERLINK):
         link = Link(self._docx_paragraph, style)
         link.set_anchor(anchor)
         self._docx_paragraph._p.append(link.element)
@@ -157,7 +158,7 @@ class Paragraph(Renderable):
 
         # add space before if the previous element is table
         if isinstance(previous_rendered, RenderedInfo) and isinstance(previous_rendered.docx_element, Table):
-            self._docx_paragraph.paragraph_format.space_before = Cm(0.35)  # todo: remake
+            self._docx_paragraph.paragraph_format.space_before = SPACE_AFTER_TABLE  # todo: remake
 
         if self.page_break_before:
             layout_state.add_height(layout_state.remaining_page_height)

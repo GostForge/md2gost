@@ -8,6 +8,7 @@ from docx.shared import Parented, Length, Cm
 
 from . import Renderable
 from .paragraph_sizer import ParagraphSizer
+from ..constants import FIRST_LINE_INDENT, STYLE_HEADING_PREFIX
 from ..layout_tracker import LayoutState
 from .paragraph import Paragraph
 from ..rendered_info import RenderedInfo
@@ -25,7 +26,7 @@ class Heading(Paragraph):
         if not 1 <= level <= 9:
             raise ValueError("Heading level must be in range from 1 to 9")
 
-        self.style = f"Heading {level}"
+        self.style = f"{STYLE_HEADING_PREFIX} {level}"
 
         if not numbered:
             self._remove_numbering()
@@ -89,7 +90,7 @@ class Heading(Paragraph):
             self._docx_paragraph,
             previous_rendered.docx_element
             if previous_rendered and isinstance(previous_rendered.docx_element, DocxParagraph) else None,
-            layout_state.max_width, Cm(1.25)).calculate_height()
+            layout_state.max_width, FIRST_LINE_INDENT).calculate_height()
 
         if layout_state.current_page_height == 0 and layout_state.page != 1:
             height_data.before = 0

@@ -5,10 +5,11 @@ import docx
 from docx.document import Document
 from docx.oxml import CT_P, CT_Tbl, CT_Blip
 from docx.oxml.ns import qn
-from docx.shared import Cm
 from docx.styles.style import _ParagraphStyle
 from docx.text.paragraph import Paragraph
 
+from .constants import BOTTOM_MARGIN_EFFECTIVE as BOTTOM_MARGIN
+from .config import Md2GostConfig, get_default_config
 from .debugger import Debugger
 from .layout_tracker import LayoutTracker
 from .numberer import NumberingPreProcessor
@@ -17,14 +18,14 @@ from .toc_processor import TocPreProcessor, TocPostProcessor
 from .renderer import Renderer
 from .util import merge_objects
 
-BOTTOM_MARGIN = Cm(1.86)
-
 
 class Converter:
     """Converts markdown file to docx file"""
 
     def __init__(self, input_paths: list[str], output_path: str,
-                 template_path: str = None, title_path: str | None = None, title_pages: int = 1, debug: bool = False):
+                 template_path: str = None, title_path: str | None = None, title_pages: int = 1,
+                 debug: bool = False, config: Md2GostConfig | None = None):
+        self._config = config or get_default_config()
         self._output_path = output_path
         self._title_document: Document = docx.Document(title_path)
         self._title_pages = title_pages if title_path else 0

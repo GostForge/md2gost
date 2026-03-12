@@ -16,6 +16,7 @@ from docx.styles.style import _ParagraphStyle
 from PIL import Image, ImageDraw, ImageFont
 
 from .find_font import find_font
+from ..constants import LINE_HEIGHT_TIMES_14, LINE_HEIGHT_COURIER_12
 from ..util import merge_objects
 
 
@@ -38,9 +39,9 @@ class Font:
     def get_line_height(self) -> Length:
         # TODO: make it work for all fonts
         if "Times" in str(self._face.family_name) and self._freetypefont.size == 14:
-            return Pt(16.05)
+            return LINE_HEIGHT_TIMES_14
         if "Courier" in str(self._face.family_name) and self._freetypefont.size == 12:
-            return Pt(13.61)
+            return LINE_HEIGHT_COURIER_12
         else:
             return Pt(self._face.size.height / 64)
 
