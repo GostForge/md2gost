@@ -2,9 +2,16 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# System deps for python-docx, freetype, pillow and font discovery (fc-list)
+# System deps for python-docx, freetype, pillow, font discovery and MS fonts
 RUN apt-get update && apt-get install -y --no-install-recommends \
-  libfreetype6 libfreetype6-dev fontconfig fonts-dejavu-core gcc && \
+  libfreetype6 libfreetype6-dev fontconfig fonts-dejavu-core gcc \
+  cabextract wget xfonts-utils && \
+    echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" \
+      | debconf-set-selections && \
+    apt-get install -y --no-install-recommends ttf-mscorefonts-installer && \
+    wget -q https://gist.githubusercontent.com/maxwelleite/10774746/raw/ttf-vista-fonts-installer.sh -O /tmp/vista.sh && \
+    bash /tmp/vista.sh && rm /tmp/vista.sh && \
+    fc-cache -f && \
     rm -rf /var/lib/apt/lists/*
 
 # Install poetry

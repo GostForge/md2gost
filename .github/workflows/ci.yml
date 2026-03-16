@@ -50,6 +50,7 @@ jobs:
           fc-match --format="%{file} | %{family} | weight=%{weight} slant=%{slant}\n" "Times New Roman:weight=bold:slant=roman"
           fc-match --format="%{file} | %{family} | weight=%{weight} slant=%{slant}\n" "Times New Roman:weight=regular:slant=italic"
           fc-match --format="%{file} | %{family} | weight=%{weight} slant=%{slant}\n" "Calibri:weight=regular:slant=roman"
+          fc-match --format="%{file} | %{family} | weight=%{weight} slant=%{slant}\n" "Consolas:weight=regular:slant=roman"
           fc-match --format="%{file} | %{family} | weight=%{weight} slant=%{slant}\n" "Courier New:weight=regular:slant=roman"
 
       - name: Install dependencies
