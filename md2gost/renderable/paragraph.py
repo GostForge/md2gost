@@ -13,6 +13,7 @@ from . import Renderable
 from .paragraph_sizer import ParagraphSizer
 from ..constants import STYLE_NORMAL, STYLE_HYPERLINK, SPACE_AFTER_TABLE
 from ..docx_elements import create_field
+from ..latex_math import latex_to_omml, inline_omml
 from ..layout_tracker import LayoutState
 from ..util import create_element
 from ..rendered_info import RenderedInfo
@@ -62,7 +63,7 @@ class Reference:
     def unique_name(self) -> str:
         return self._unique_name
 
-    def set_number(self, number: int):
+    def set_number(self, number: int | str):
         self._element.xpath("w:t")[0].text = str(number)
 
     def element(self) -> CT_R:
@@ -111,14 +112,20 @@ class Paragraph(Renderable):
         return link
 
     def add_inline_equation(self, formula: str):
-        # omml = inline_omml(latex_to_omml(formula))
-        # for r in omml.xpath("//m:r", namespaces=omml.nsmap):
-        #     r.append(create_element("w:rPr", [
-        #         create_element("w:sz", {"w:val": "24"}),
-        #         create_element("w:szCs", {"w:val": "24"}),
-        #     ]))
-        # self._docx_paragraph._element.append(omml)
-        self.add_run(formula, is_italic=True)
+        """Вставляет inline-формулу как OMML-объект (не просто курсивный текст)."""
+        try:
+            omml = inline_omml(latex_to_omml(formula))
+            # Установить размер шрифта для m:r элементов, чтобы формула
+            # совпадала с основным текстом (28 half-points = 14 pt)
+            for r in omml.xpath("//m:r", namespaces=omml.nsmap):
+                rPr = r.find("{http://schemas.openxmlformats.org/officeDocument/2006/math}rPr")
+                if rPr is None:
+                    rPr = create_element("m:rPr")
+                    r.insert(0, rPr)
+            self._docx_paragraph._element.append(omml)
+        except (ValueError, Exception):
+            # Fallback: если формула не парсится, вставить как курсив
+            self.add_run(formula, is_italic=True)
 
     @property
     def page_break_before(self) -> bool:

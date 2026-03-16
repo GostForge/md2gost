@@ -5,6 +5,7 @@ from docx.shared import Parented, Length
 from docx.table import Table, _Row, _Cell
 
 from .util import create_element
+from .constants import STYLE_TABLE_GRID
 
 
 __all__ = [
@@ -14,7 +15,7 @@ __all__ = [
 ]
 
 
-def create_table(parent: Parented, rows: int, cols, width: Length, style="Table Grid"):
+def create_table(parent: Parented, rows: int, cols, width: Length, style=STYLE_TABLE_GRID):
     table = Table(CT_Tbl.new_tbl(rows, cols, width), parent)
     table.style = style
 

@@ -7,5 +7,6 @@ class RequiresNumbering(ABC):
         self.numbering_unique_name = unique_name
 
     @abstractmethod
-    def set_number(self, number: int):
+    def set_number(self, number: int | str):
+        """Accept int for sequential or str like '2.3' for sectional numbering."""
         pass

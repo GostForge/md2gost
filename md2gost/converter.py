@@ -114,7 +114,7 @@ class Converter:
 
         processors = [
             TocPreProcessor(),
-            NumberingPreProcessor(),
+            NumberingPreProcessor(sectional=self._config.sectional_numbering),
             Renderer(self._document, self._layout_tracker, self._debugger),
             TocPostProcessor(self._title_pages),
         ]

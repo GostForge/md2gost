@@ -34,8 +34,27 @@ def create_element(name: str, *args: dict[str, str] | list[_Element] | str)\
     return element
 
 
+def _safe_getmembers(obj):
+    """Like inspect.getmembers but catches ValueError too.
+
+    python-docx raises ValueError from some properties (e.g. ``.part``)
+    when elements are not attached to a document part.  The stdlib
+    ``inspect.getmembers`` only catches ``AttributeError``, so those
+    ``ValueError``s propagate and crash.  This helper swallows both.
+    """
+    results = []
+    for key in dir(obj):
+        try:
+            value = getattr(obj, key)
+        except (AttributeError, ValueError, TypeError):
+            continue
+        results.append((key, value))
+    results.sort(key=lambda pair: pair[0])
+    return results
+
+
 def merge_objects(*objects):
-    from inspect import getmembers, ismethod
+    from inspect import ismethod
     """
     Returns the new object containing attributes from objects, where the latest
     one has the highest priority.
@@ -45,13 +64,13 @@ def merge_objects(*objects):
         pass
 
     merged_object = MergedObject()
-    for name, value in getmembers(objects[0]):
+    for name, value in _safe_getmembers(objects[0]):
         if name.startswith("_") or ismethod(value):
             continue
         merged_object.__setattr__(name, value)
 
     for object_ in objects[1:]:
-        for name, value in getmembers(object_):
+        for name, value in _safe_getmembers(object_):
             if name.startswith("_") or ismethod(value):
                 continue
             if value is not None:

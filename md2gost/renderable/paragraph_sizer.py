@@ -16,7 +16,7 @@ from docx.styles.style import _ParagraphStyle
 from PIL import Image, ImageDraw, ImageFont
 
 from .find_font import find_font
-from ..constants import LINE_HEIGHT_TIMES_14, LINE_HEIGHT_COURIER_12
+from ..constants import LINE_HEIGHT_TIMES_14, LINE_HEIGHT_COURIER_12, SPACE_WIDTH_CORRECTION
 from ..util import merge_objects
 
 
@@ -121,7 +121,7 @@ class ParagraphSizer:
 
         space_width = Font(docx_font.name, docx_font.bold, docx_font.italic, docx_font.size.pt).get_text_width(" ")
         if not is_mono:
-            space_width *= 0.81
+            space_width *= SPACE_WIDTH_CORRECTION
 
         word_part = ""
         word_parts_widths = [0]

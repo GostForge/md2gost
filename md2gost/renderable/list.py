@@ -33,12 +33,16 @@ class List(Renderable):
         paragraph = Paragraph(self._parent)
         paragraph.add_run((f"{self._numbering[level-1]}." if self._ordered else LIST_MARKER_UNORDERED)+"\t")
 
-        # first level indent is a first_line_indent of normal text
-        first_indent = self._parent.part.styles[STYLE_NORMAL].paragraph_format.first_line_indent
+        # ГОСТ Таблица 4.1: маркер на 1.25 см, текст на 2.25 см
+        # first_indent (from Normal) = 1.25 см — позиция маркера
+        first_indent = self._parent.part.styles[STYLE_NORMAL].paragraph_format.first_line_indent or 0
 
-        # idk how it works but it works
+        # left_indent = позиция текста. Уровень 1: first_indent + LIST_MARKER_INDENT
         paragraph._docx_paragraph.paragraph_format.tab_stops.add_tab_stop(LIST_TAB_STOP)
-        paragraph._docx_paragraph.paragraph_format.left_indent = (LIST_MARKER_INDENT + (first_indent or 0) + LEVEL_INDENT*(level-1))
+        paragraph._docx_paragraph.paragraph_format.left_indent = (
+            first_indent + LIST_MARKER_INDENT + LEVEL_INDENT * (level - 1)
+        )
+        # Hanging indent: маркер смещается назад на LIST_MARKER_INDENT
         paragraph._docx_paragraph.paragraph_format.first_line_indent = -LIST_MARKER_INDENT
 
         self._last_paragraph_space_after = paragraph._docx_paragraph.paragraph_format.space_after

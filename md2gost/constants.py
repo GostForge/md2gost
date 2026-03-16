@@ -32,6 +32,7 @@ PAGE_HEIGHT_A4 = Mm(297)
 FONT_MAIN = "Times New Roman"
 FONT_SIZE_MAIN = Pt(14)           # 14 пт
 LINE_SPACING_MAIN = 1.5           # Полуторный
+LINE_SPACING_SINGLE = 1           # Одинарный (таблицы, рисунки)
 FIRST_LINE_INDENT = Cm(1.25)      # Отступ первой строки — 1,25 см
 
 
@@ -55,6 +56,15 @@ HEADING3_SPACE_AFTER = Pt(12)
 # ─── Подписи / Captions ─────────────────────────────────────────────────────
 CAPTION_FONT_SIZE = Pt(12)
 CAPTION_SEPARATOR = " \u2014 "    # " — " (em dash), ГОСТ: через тире
+
+# Интервалы подписей (ГОСТ Таблицы 6.1, 7.1, 8.1)
+# Таблица: перед=6пт после=0; Рисунок: перед=0 после=6пт; Листинг: перед=6пт после=0
+CAPTION_SPACE_BEFORE_TABLE   = Pt(6)
+CAPTION_SPACE_BEFORE_IMAGE   = Pt(0)
+CAPTION_SPACE_BEFORE_LISTING = Pt(6)
+CAPTION_SPACE_AFTER_TABLE    = Pt(0)
+CAPTION_SPACE_AFTER_IMAGE    = Pt(6)
+CAPTION_SPACE_AFTER_LISTING  = Pt(0)
 
 
 # ─── Таблицы (Таблица 6.1, п. 6) ───────────────────────────────────────────
@@ -83,17 +93,19 @@ LISTING_CAPTION_CATEGORY = "Листинг"
 LISTING_CONTINUATION_PREFIX = "Продолжение Листинга"  # С большой «Л»
 LISTING_OFFSET = Pt(14)           # Компенсация внутренних padding рамки листинга
 LISTING_BORDER_HEIGHT = Pt(1)     # Суммарная высота верхней и нижней границ рамки
+LISTING_PYGMENTS_STYLE = "sas"    # Pygments colour scheme для подсветки синтаксиса
 
 
 # ─── Списки (Таблица 4.1, п. 4) ────────────────────────────────────────────
 LIST_MARKER_UNORDERED = "●"       # Допустимые по ГОСТ: «--», «―», «●», «■», «○»
-LIST_MARKER_INDENT = Twips(425)   # ≈ 0.75 см — отступ маркера от left_indent
-LIST_LEVEL_INDENT = Twips(425)    # Дополнительный отступ на каждый уровень вложенности
-LIST_TAB_STOP = Twips(360)        # Табуляция после маркера
+LIST_MARKER_INDENT = Cm(1.0)      # Расстояние от маркера до текста (ГОСТ: текст на 2.25, маркер на 1.25)
+LIST_LEVEL_INDENT = Cm(1.0)       # Дополнительный отступ на каждый уровень вложенности
+LIST_TAB_STOP = Cm(1.0)           # Табуляция от начала абзаца до текста
 
 
 # ─── Содержание (TOC) ──────────────────────────────────────────────────────
 TOC_ENTRY_SPACE_AFTER = Cm(0.18)
+TOC_LEVEL_INDENT = "    "          # 4 пробела — визуальный отступ на уровень вложенности TOC
 
 
 # ─── Интервалы после таблиц/caption (п. 6.6, и код) ────────────────────────
@@ -101,10 +113,15 @@ SPACE_AFTER_TABLE = Cm(0.35)      # Перед абзацем, следующи�
 SPACE_BEFORE_CAPTION_AFTER_TABLE = Cm(0.45)  # Перед caption, идущим после таблицы
 
 
+# ─── Orphan / widow control ─────────────────────────────────────────────────
+ORPHAN_CONTROL_LINES = 3          # heading/caption: page-break если < N строк влезает после
+
+
 # ─── ParagraphSizer: хардкоженные line_height ───────────────────────────────
 # Эмпирические значения, потому что FreeType не даёт точного line_height для docx.
 LINE_HEIGHT_TIMES_14 = Pt(16.05)
 LINE_HEIGHT_COURIER_12 = Pt(13.61)
+SPACE_WIDTH_CORRECTION = 0.81     # Эмпирический множитель ширины пробела (non-mono)
 
 
 # ─── PageBreak ──────────────────────────────────────────────────────────────

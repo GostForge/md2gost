@@ -61,6 +61,132 @@ _jobs: dict[str, JobInfo] = {}
 _RESULTS_DIR = Path(tempfile.mkdtemp(prefix="md2gost_results_"))
 _TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "Template.docx")
 
+
+def _resolve_target_path(base_dir: Path, raw_name: str) -> Optional[Path]:
+    normalized_name = raw_name.replace("\\", "/").lstrip("/")
+    if not normalized_name:
+        return None
+
+    target = (base_dir / normalized_name).resolve(strict=False)
+    base = base_dir.resolve(strict=False)
+    if target != base and base not in target.parents:
+        return None
+    return target
+
+
+def _classify_uploaded_files(
+    files: List[UploadFile],
+) -> tuple[List[UploadFile], Optional[UploadFile], Optional[UploadFile], List[UploadFile]]:
+    markdown_files: List[UploadFile] = []
+    template_file: Optional[UploadFile] = None
+    title_file: Optional[UploadFile] = None
+    asset_files: List[UploadFile] = []
+
+    for uploaded in files:
+        if not uploaded.filename:
+            continue
+
+        normalized_name = uploaded.filename.replace("\\", "/")
+        basename = Path(normalized_name).name.lower()
+
+        if basename == "template.docx":
+            if template_file is not None:
+                raise HTTPException(status_code=400, detail="Multiple template.docx files provided")
+            template_file = uploaded
+            continue
+
+        if basename == "title.docx":
+            if title_file is not None:
+                raise HTTPException(status_code=400, detail="Multiple title.docx files provided")
+            title_file = uploaded
+            continue
+
+        if normalized_name.lower().endswith(".md"):
+            markdown_files.append(uploaded)
+            continue
+
+        asset_files.append(uploaded)
+
+    if not markdown_files:
+        raise HTTPException(status_code=400, detail="At least one Markdown file (.md) is required in files[]")
+
+    markdown_files.sort(key=lambda upload: (upload.filename or "").replace("\\", "/").casefold())
+
+    return markdown_files, template_file, title_file, asset_files
+
+
+async def _save_uploaded_file(
+    base_dir: Path,
+    upload: UploadFile,
+    *,
+    override_name: Optional[str] = None,
+) -> Optional[Path]:
+    source_name = override_name or upload.filename or ""
+    target_path = _resolve_target_path(base_dir, source_name)
+    if target_path is None:
+        logger.warning("Blocked path-traversal in uploaded filename: %s", source_name or "<empty>")
+        return None
+
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    data = await upload.read()
+    target_path.write_bytes(data)
+    logger.debug("Saved uploaded file: %s (%d bytes)", source_name, len(data))
+    return target_path
+
+
+async def _prepare_conversion_inputs(files: List[UploadFile], base_dir: Path) -> tuple[List[str], str, Optional[str]]:
+    markdown_files, template_file, title_file, asset_files = _classify_uploaded_files(files)
+
+    md_paths: List[str] = []
+    for markdown_file in markdown_files:
+        md_path = await _save_uploaded_file(base_dir, markdown_file)
+        if md_path is None:
+            raise HTTPException(status_code=400, detail="Invalid Markdown filename")
+        md_paths.append(str(md_path))
+
+    for asset in asset_files:
+        if not asset.filename:
+            continue
+        saved_asset = await _save_uploaded_file(base_dir, asset)
+        if saved_asset is None:
+            logger.warning("Skipped asset with invalid filename: %s", asset.filename)
+
+    template_path = _TEMPLATE_PATH
+    if template_file:
+        saved_template = await _save_uploaded_file(base_dir, template_file, override_name="template.docx")
+        if saved_template is None:
+            raise HTTPException(status_code=400, detail="Invalid template filename")
+        template_path = str(saved_template)
+
+    title_path = None
+    if title_file:
+        saved_title = await _save_uploaded_file(base_dir, title_file, override_name="title.docx")
+        if saved_title is None:
+            raise HTTPException(status_code=400, detail="Invalid title filename")
+        title_path = str(saved_title)
+
+    return md_paths, template_path, title_path
+
+
+def _run_conversion(
+    md_paths: List[str],
+    output_path: str,
+    template_path: str,
+    title_path: Optional[str],
+    title_pages: int,
+) -> list[str]:
+    clear_warnings()
+    converter = Converter(
+        input_paths=md_paths,
+        output_path=output_path,
+        template_path=template_path,
+        title_path=title_path,
+        title_pages=title_pages,
+    )
+    converter.convert()
+    converter.document.save(output_path)
+    return list(get_warnings())
+
 # ── Health ───────────────────────────────────────────────────
 
 @app.get("/health", tags=["system"])
@@ -72,73 +198,31 @@ async def health():
 
 @app.post("/convert", tags=["conversion"])
 async def convert_sync(
-    file: UploadFile = File(..., description="Markdown file (.md)"),
-    template: Optional[UploadFile] = File(None, description="Optional DOCX template"),
-    title: Optional[UploadFile] = File(None, description="Optional title page DOCX"),
-    assets: List[UploadFile] = File([], description="Additional project files (images, etc.) with relative paths as filenames"),
+    files: List[UploadFile] = File(
+        ...,
+        description="Project files: one or more Markdown (.md) files; optional template.docx/title.docx; others treated as assets",
+    ),
     title_pages: int = Form(1, description="Number of title pages"),
 ):
     """
-    Synchronous conversion: upload Markdown, receive DOCX immediately.
-    Asset files (images, etc.) are placed in the same temp directory using
-    their filenames as relative paths so the converter can resolve references.
+    Synchronous conversion: upload project files in files[], receive DOCX immediately.
+    Markdown files are sorted by filename and merged in that order; template.docx
+    and title.docx are recognized by name, all other files are treated as assets.
     """
-    filename = file.filename or "document.md"
-    if not filename.endswith(".md"):
-        raise HTTPException(status_code=400, detail="File must have .md extension")
-
     with tempfile.TemporaryDirectory(prefix="md2gost_") as tmpdir:
-        # Save input markdown
-        md_path = os.path.join(tmpdir, filename)
-        content = await file.read()
-        with open(md_path, "wb") as f:
-            f.write(content)
-
-        # Save asset files (images, etc.) preserving relative paths
-        for asset in assets:
-            if not asset.filename:
-                continue
-            # ── Path-traversal guard ──
-            cleaned = asset.filename.lstrip("/").lstrip("\\")
-            asset_path = os.path.normpath(os.path.join(tmpdir, cleaned))
-            if not asset_path.startswith(os.path.normpath(tmpdir) + os.sep):
-                logger.warning("Blocked path-traversal in asset filename: %s", asset.filename)
-                continue
-            os.makedirs(os.path.dirname(asset_path), exist_ok=True)
-            asset_data = await asset.read()
-            with open(asset_path, "wb") as f:
-                f.write(asset_data)
-            logger.debug("Saved asset: %s (%d bytes)", asset.filename, len(asset_data))
-
-        # Save optional template
-        template_path = _TEMPLATE_PATH
-        if template:
-            template_path = os.path.join(tmpdir, "template.docx")
-            with open(template_path, "wb") as f:
-                f.write(await template.read())
-
-        # Save optional title
-        title_path = None
-        if title:
-            title_path = os.path.join(tmpdir, "title.docx")
-            with open(title_path, "wb") as f:
-                f.write(await title.read())
+        md_paths, template_path, title_path = await _prepare_conversion_inputs(files, Path(tmpdir))
 
         # Output path
         output_path = os.path.join(tmpdir, "output.docx")
 
         try:
-            clear_warnings()
-            converter = Converter(
-                input_paths=[md_path],
+            warnings = _run_conversion(
+                md_paths=md_paths,
                 output_path=output_path,
                 template_path=template_path,
                 title_path=title_path,
                 title_pages=title_pages,
             )
-            converter.convert()
-            converter.document.save(output_path)
-            warnings = get_warnings()
         except Exception as e:
             logger.exception("Conversion failed")
             raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
@@ -162,40 +246,22 @@ async def convert_sync(
 @app.post("/jobs", tags=["jobs"], response_model=JobInfo, status_code=202)
 async def create_job(
     background_tasks: BackgroundTasks,
-    file: UploadFile = File(..., description="Markdown file (.md)"),
-    template: Optional[UploadFile] = File(None, description="Optional DOCX template"),
-    title: Optional[UploadFile] = File(None, description="Optional title page DOCX"),
+    files: List[UploadFile] = File(
+        ...,
+        description="Project files: one or more Markdown (.md) files; optional template.docx/title.docx; others treated as assets",
+    ),
     title_pages: int = Form(1),
     callback_url: Optional[str] = Form(None, description="URL to POST result notification to"),
 ):
     """
-    Asynchronous conversion: creates a job and returns immediately.
+    Asynchronous conversion: creates a job from files[] and returns immediately.
     Poll GET /jobs/{id} for status, or supply callback_url for push notification.
     """
-    filename = file.filename or "document.md"
-    if not filename.endswith(".md"):
-        raise HTTPException(status_code=400, detail="File must have .md extension")
-
     job_id = str(uuid.uuid4())
     job_dir = _RESULTS_DIR / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
 
-    # Persist uploaded files to job directory
-    md_path = job_dir / filename
-    with open(md_path, "wb") as f:
-        f.write(await file.read())
-
-    template_path = _TEMPLATE_PATH
-    if template:
-        template_path = str(job_dir / "template.docx")
-        with open(template_path, "wb") as f:
-            f.write(await template.read())
-
-    title_path = None
-    if title:
-        title_path = str(job_dir / "title.docx")
-        with open(title_path, "wb") as f:
-            f.write(await title.read())
+    md_paths, template_path, title_path = await _prepare_conversion_inputs(files, job_dir)
 
     job = JobInfo(
         id=job_id,
@@ -207,7 +273,7 @@ async def create_job(
     background_tasks.add_task(
         _run_conversion_job,
         job_id=job_id,
-        md_path=str(md_path),
+        md_paths=md_paths,
         template_path=template_path,
         title_path=title_path,
         title_pages=title_pages,
@@ -248,7 +314,7 @@ async def get_job_result(job_id: str):
 
 def _run_conversion_job(
     job_id: str,
-    md_path: str,
+    md_paths: List[str],
     template_path: str,
     title_path: Optional[str],
     title_pages: int,
@@ -261,15 +327,13 @@ def _run_conversion_job(
     output_path = str(_RESULTS_DIR / job_id / "result.docx")
 
     try:
-        converter = Converter(
-            input_paths=[md_path],
+        _run_conversion(
+            md_paths=md_paths,
             output_path=output_path,
             template_path=template_path,
             title_path=title_path,
             title_pages=title_pages,
         )
-        converter.convert()
-        converter.document.save(output_path)
 
         job.status = JobStatus.DONE
         job.result_path = output_path

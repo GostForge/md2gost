@@ -20,7 +20,7 @@ from ..layout_tracker import LayoutState
 from ..rendered_info import RenderedInfo
 from ..util import create_element
 from ..warnings_collector import add_warning
-from ..constants import IMAGE_CAPTION_CATEGORY, IMAGE_RESIZE_THRESHOLD
+from ..constants import IMAGE_CAPTION_CATEGORY, IMAGE_RESIZE_THRESHOLD, CAPTION_SPACE_BEFORE_IMAGE, CAPTION_SPACE_AFTER_IMAGE, LINE_SPACING_SINGLE
 
 _BLOCKED_SCHEMES = {"file", "ftp", "gopher", "data"}
 
@@ -53,7 +53,7 @@ class Image(Renderable, RequiresNumbering):
         self._docx_paragraph.paragraph_format.space_before = 0
         self._docx_paragraph.paragraph_format.space_after = 0
         self._docx_paragraph.paragraph_format.first_line_indent = 0
-        self._docx_paragraph.paragraph_format.line_spacing = 1
+        self._docx_paragraph.paragraph_format.line_spacing = LINE_SPACING_SINGLE
         self._docx_paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
         self._invalid = False
 
@@ -80,7 +80,7 @@ class Image(Renderable, RequiresNumbering):
 
         self._number = None
 
-    def set_number(self, number: int):
+    def set_number(self, number: int | str):
         self._number = number
 
     def resize(self, width: Length = None, height: Length = None):
@@ -112,7 +112,8 @@ class Image(Renderable, RequiresNumbering):
 
         height = self._image.height
 
-        caption = Caption(self._parent, IMAGE_CAPTION_CATEGORY, self._caption_info, self._number, False)
+        caption = Caption(self._parent, IMAGE_CAPTION_CATEGORY, self._caption_info, self._number, False,
+                         is_bold=True, is_italic=False, space_before=CAPTION_SPACE_BEFORE_IMAGE, space_after=CAPTION_SPACE_AFTER_IMAGE)
         caption.center()
 
         caption_rendered_infos = list(caption.render(None, copy(layout_state)))

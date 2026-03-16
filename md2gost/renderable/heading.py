@@ -8,7 +8,7 @@ from docx.shared import Parented, Length, Cm
 
 from . import Renderable
 from .paragraph_sizer import ParagraphSizer
-from ..constants import FIRST_LINE_INDENT, STYLE_HEADING_PREFIX
+from ..constants import FIRST_LINE_INDENT, STYLE_HEADING_PREFIX, ORPHAN_CONTROL_LINES
 from ..layout_tracker import LayoutState
 from .paragraph import Paragraph
 from ..rendered_info import RenderedInfo
@@ -96,7 +96,7 @@ class Heading(Paragraph):
             height_data.before = 0
 
         # if a heading + 3 lines don't fit to the page, they go to the next page
-        if ((height_data.lines + 3 - 1) * height_data.line_spacing + 1) * height_data.line_height\
+        if ((height_data.lines + ORPHAN_CONTROL_LINES - 1) * height_data.line_spacing + 1) * height_data.line_height\
                 > layout_state.remaining_page_height:
             self._docx_paragraph.paragraph_format.space_before = 0  # libreoffice fix
             height = height_data.full - height_data.before

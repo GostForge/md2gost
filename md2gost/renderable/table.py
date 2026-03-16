@@ -12,6 +12,9 @@ from ..constants import (
     TABLE_BORDER_HEIGHT,
     TABLE_CAPTION_CATEGORY,
     TABLE_CONTINUATION_PREFIX,
+    CAPTION_SPACE_BEFORE_TABLE,
+    CAPTION_SPACE_AFTER_TABLE,
+    LINE_SPACING_SINGLE,
     STYLE_CAPTION,
     STYLE_NORMAL_TABLE,
     SPACE_AFTER_TABLE,
@@ -44,7 +47,7 @@ class Table(Renderable, RequiresNumbering):
         paragraph.first_line_indent = 0
         paragraph._docx_paragraph.paragraph_format.space_before = 0
         paragraph._docx_paragraph.paragraph_format.space_after = 0
-        paragraph._docx_paragraph.paragraph_format.line_spacing = 1
+        paragraph._docx_paragraph.paragraph_format.line_spacing = LINE_SPACING_SINGLE
         self._rows[row][col].append(paragraph)
         return paragraph
 
@@ -54,7 +57,8 @@ class Table(Renderable, RequiresNumbering):
     def render(self, previous_rendered: RenderedInfo, layout_state: LayoutState)\
             -> Generator[RenderedInfo | Renderable, None, None]:
         caption_rendered_infos = list(
-            Caption(self._parent, TABLE_CAPTION_CATEGORY, self._caption_info, self._number, True)
+            Caption(self._parent, TABLE_CAPTION_CATEGORY, self._caption_info, self._number, True,
+                   is_italic=True, space_before=CAPTION_SPACE_BEFORE_TABLE, space_after=CAPTION_SPACE_AFTER_TABLE)
             .render(previous_rendered, copy(layout_state))
         )
         layout_state.add_height(sum([info.height for info in caption_rendered_infos]))

@@ -5,6 +5,7 @@ from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
 from docx.oxml import CT_Tbl
 from docx.shared import Pt, Twips
 from docx.table import Table
+from docx.text.paragraph import Paragraph as DocxParagraph
 
 from .caption import CaptionInfo
 from .requires_numbering import RequiresNumbering
@@ -20,6 +21,8 @@ from ..constants import (
     STYLE_FORMULA_CONTENT,
     STYLE_FORMULA_NUMBERING,
     STYLE_NORMAL_TABLE,
+    FONT_SIZE_MAIN,
+    LINE_SPACING_MAIN,
 )
 
 
@@ -74,14 +77,28 @@ class Equation(Renderable, RequiresNumbering):
         right_cell.vertical_alignment = \
             WD_CELL_VERTICAL_ALIGNMENT.CENTER
 
-    def set_number(self, number: int):
+    def set_number(self, number: int | str):
         self._numbering_run.text = str(number)
 
     def render(self, previous_rendered: RenderedInfo, layout_state: LayoutState) -> Generator[
             "RenderedInfo | Renderable", None, None]:
+        # ГОСТ п. 5.2: перед формулой — одна пустая строка
+        blank_before = DocxParagraph(create_element("w:p"), self._table._tbl.getparent() or self._table._tbl)
+        blank_before.paragraph_format.space_before = 0
+        blank_before.paragraph_format.space_after = 0
+        blank_before.runs  # force init
+        blank_height = Pt(FONT_SIZE_MAIN * LINE_SPACING_MAIN / Pt(1))
+        yield RenderedInfo(blank_before, blank_height)
+
         height = EQUATION_DEFAULT_HEIGHT
 
         if height > layout_state.remaining_page_height:
             height += layout_state.remaining_page_height
 
         yield RenderedInfo(self._table, height)
+
+        # ГОСТ п. 5.2: после формулы — одна пустая строка
+        blank_after = DocxParagraph(create_element("w:p"), self._table._tbl.getparent() or self._table._tbl)
+        blank_after.paragraph_format.space_before = 0
+        blank_after.paragraph_format.space_after = 0
+        yield RenderedInfo(blank_after, blank_height)

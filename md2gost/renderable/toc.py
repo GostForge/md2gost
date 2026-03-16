@@ -7,7 +7,7 @@ from docx.text.run import Run
 
 from . import Paragraph
 from .renderable import Renderable
-from ..constants import TOC_ENTRY_SPACE_AFTER
+from ..constants import TOC_ENTRY_SPACE_AFTER, TOC_LEVEL_INDENT
 from ..layout_tracker import LayoutState
 from ..rendered_info import RenderedInfo
 from ..util import create_element
@@ -65,10 +65,12 @@ class ToC(Renderable):
         self._numbering[level - 1] += 1
         for i in range(level, len(self._numbering)):
             self._numbering[i] = 0
-        hyperlink.add_run("    " * (level - 1))
+        hyperlink.add_run(TOC_LEVEL_INDENT * (level - 1))
         if numbered:
             hyperlink.add_run(".".join([str(x) for x in self._numbering[:level]]) + ". ")
-        hyperlink.add_run(title)
+        # ГОСТ п. 3.4: основные разделы (level 1) — прописными буквами
+        display_title = title.upper() if level == 1 else title
+        hyperlink.add_run(display_title)
         hyperlink.add_run(f"\t")
 
         self._paragraphs.append(paragraph)

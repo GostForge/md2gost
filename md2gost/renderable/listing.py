@@ -25,6 +25,9 @@ from ..constants import (
     LISTING_CAPTION_CATEGORY,
     LISTING_CONTINUATION_PREFIX,
     LISTING_BORDER_HEIGHT,
+    LISTING_PYGMENTS_STYLE,
+    CAPTION_SPACE_BEFORE_LISTING,
+    CAPTION_SPACE_AFTER_LISTING,
     STYLE_CAPTION,
     STYLE_CODE,
     STYLE_NORMAL_TABLE,
@@ -33,7 +36,7 @@ from ..constants import (
 
 class DocxParagraphPygmentsFormatter(Formatter):
     def __init__(self, paragraphs: list[Paragraph], creator: Callable[[], Paragraph], **options):
-        Formatter.__init__(self, style="sas", **options)
+        Formatter.__init__(self, style=LISTING_PYGMENTS_STYLE, **options)
         self._creator = creator
         self._paragraphs = paragraphs
         self._styles = {}
@@ -100,13 +103,14 @@ class Listing(Renderable, RequiresNumbering):
             paragraph.add_run(line)
             self.paragraphs.append(paragraph)
 
-    def set_number(self, number: int):
+    def set_number(self, number: int | str):
         self._number = number
 
     def render(self, previous_rendered: RenderedInfo, layout_state: LayoutState)\
             -> Generator[RenderedInfo | Renderable, None, None]:
         caption_rendered_infos = list(
-            Caption(self._parent, LISTING_CAPTION_CATEGORY, self._caption_info, self._number, True)
+            Caption(self._parent, LISTING_CAPTION_CATEGORY, self._caption_info, self._number, True,
+                   is_italic=True, space_before=CAPTION_SPACE_BEFORE_LISTING, space_after=CAPTION_SPACE_AFTER_LISTING)
             .render(previous_rendered, copy(layout_state))
         )
         layout_state.add_height(sum([info.height for info in caption_rendered_infos]))

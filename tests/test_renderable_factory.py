@@ -1,10 +1,9 @@
 """Тесты для RenderableFactory — создание Renderable из marko-элементов."""
 
 import unittest
+from pathlib import Path
 
 import docx
-from docx.shared import Pt, Cm
-from docx.enum.style import WD_STYLE_TYPE
 
 from md2gost.extended_markdown import markdown
 from md2gost.renderable_factory import RenderableFactory
@@ -20,23 +19,8 @@ from md2gost.renderable.caption import CaptionInfo
 
 
 def _make_factory():
-    doc = docx.Document()
-    # Set up minimal styles matching Template.docx
-    doc.styles["Normal"].font.name = "Times New Roman"
-    doc.styles["Normal"].font.size = Pt(14)
-    doc.styles["Normal"].paragraph_format.first_line_indent = Cm(1.25)
-    doc.styles["Normal"].paragraph_format.line_spacing = 1.5
-    doc.styles["Normal"].paragraph_format.space_before = 0
-    doc.styles["Normal"].paragraph_format.space_after = 0
-
-    code_style = doc.styles.add_style("Code", WD_STYLE_TYPE.PARAGRAPH)
-    code_style.font.name = "Courier New"
-    code_style.font.size = Pt(12)
-    code_style.paragraph_format.line_spacing = 1.0
-    code_style.paragraph_format.space_before = 0
-    code_style.paragraph_format.space_after = 0
-    code_style.paragraph_format.first_line_indent = 0
-
+    template_path = Path(__file__).resolve().parents[1] / "md2gost" / "Template.docx"
+    doc = docx.Document(str(template_path))
     return RenderableFactory(doc._body), doc
 
 
@@ -107,7 +91,6 @@ class TestFactoryTable(unittest.TestCase):
 
 
 class TestFactoryEquation(unittest.TestCase):
-    @unittest.skip("Requires 'Formula Content' style from Template.docx")
     def test_creates_equation(self):
         factory, doc = _make_factory()
         parsed = markdown.parse("$$ x^2 + 1 $$\n")
