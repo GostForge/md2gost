@@ -3,11 +3,12 @@ from dataclasses import dataclass
 from typing import Generator
 from uuid import uuid4
 
-from docx.shared import Parented, Cm
+from docx.shared import Parented
 from docx.text.paragraph import Paragraph as DocxParagraph
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.table import Table
 
+from ..config import Md2GostConfig, get_default_config
 from ..layout_tracker import LayoutState
 from .renderable import Renderable
 from ..rendered_info import RenderedInfo
@@ -16,6 +17,8 @@ from ..util import create_element
 from ..constants import (
     STYLE_CAPTION, CAPTION_SEPARATOR, SPACE_BEFORE_CAPTION_AFTER_TABLE,
     CAPTION_FONT_SIZE, ORPHAN_CONTROL_LINES,
+    CaptionTextStyle,
+    TABLE_CAPTION_CATEGORY, IMAGE_CAPTION_CATEGORY, LISTING_CAPTION_CATEGORY, EQUATION_CAPTION_CATEGORY,
 )
 
 from docx.shared import Length
@@ -27,7 +30,7 @@ class CaptionInfo:
     text: str | None
 
 
-def _make_rPr(bold: bool, italic: bool, sz_val: str):
+def _make_rPr(bold: bool, italic: bool, underline: bool, sz_val: str):
     """Build a ``w:rPr`` element with bold / italic / size."""
     rPr = create_element("w:rPr")
     if bold:
@@ -38,26 +41,47 @@ def _make_rPr(bold: bool, italic: bool, sz_val: str):
         rPr.append(create_element("w:i"))
     else:
         rPr.append(create_element("w:i", {"w:val": "0"}))
+    if underline:
+        rPr.append(create_element("w:u", {"w:val": "single"}))
+    else:
+        rPr.append(create_element("w:u", {"w:val": "none"}))
     rPr.append(create_element("w:sz", {"w:val": sz_val}))
     rPr.append(create_element("w:szCs", {"w:val": sz_val}))
     return rPr
+
+
+def _style_for_category(category: str, config: Md2GostConfig) -> CaptionTextStyle:
+    if category == TABLE_CAPTION_CATEGORY:
+        return config.caption_table_style
+    if category == IMAGE_CAPTION_CATEGORY:
+        return config.caption_image_style
+    if category == LISTING_CAPTION_CATEGORY:
+        return config.caption_listing_style
+    if category == EQUATION_CAPTION_CATEGORY:
+        return config.caption_equation_style
+    return CaptionTextStyle.NONE
 
 
 class Caption(Renderable):
     def __init__(self, parent: Parented, category: str, caption_info: CaptionInfo | None,
                  number: int | str = None, before=True, *,
                  is_bold: bool = None, is_italic: bool = None,
+                 is_underline: bool = None,
+                 text_style: CaptionTextStyle | None = None,
                  space_before: Length = None, space_after: Length = None):
         """
         Args:
             is_bold: Принудительно полужирный (ГОСТ: рисунки).
             is_italic: Принудительно курсив (ГОСТ: таблицы).
+            is_underline: Принудительное подчёркивание.
+            text_style: Декорации подписи через bit flags CaptionTextStyle.
             space_before: Интервал перед caption (ГОСТ: 6пт для таблиц/листингов, 0 для рисунков).
             space_after: Интервал после caption (ГОСТ: 0 для таблиц/листингов, 6пт для рисунков).
         """
         self._parent = parent
         self._before = before
         self._space_before = space_before
+        self._config = get_default_config()
         self._docx_paragraph = DocxParagraph(create_element("w:p"), parent)
 
         uid = uuid4().hex
@@ -70,8 +94,21 @@ class Caption(Renderable):
 
         # Explicit values — never None so Template.docx style inheritance cannot interfere.
         # ГОСТ: рисунки=bold, таблицы/листинги=italic; все caption 12 пт.
-        bold = bool(is_bold)
-        italic = bool(is_italic)
+        if text_style is None:
+            if is_bold is None and is_italic is None and is_underline is None:
+                text_style = _style_for_category(category, self._config)
+            else:
+                text_style = CaptionTextStyle.NONE
+                if bool(is_bold):
+                    text_style |= CaptionTextStyle.BOLD
+                if bool(is_italic):
+                    text_style |= CaptionTextStyle.ITALIC
+                if bool(is_underline):
+                    text_style |= CaptionTextStyle.UNDERLINE
+
+        bold = bool(text_style & CaptionTextStyle.BOLD)
+        italic = bool(text_style & CaptionTextStyle.ITALIC)
+        underline = bool(text_style & CaptionTextStyle.UNDERLINE)
         # half-points for raw XML runs (w:sz): Pt(12) = 24 hp
         sz_val = str(int(CAPTION_FONT_SIZE.pt * 2))
 
@@ -79,6 +116,7 @@ class Caption(Renderable):
         run_category = self._docx_paragraph.add_run(f"{category} ")
         run_category.bold = bold
         run_category.italic = italic
+        run_category.underline = underline
         run_category.font.size = CAPTION_FONT_SIZE
 
         if caption_info and caption_info.unique_name:
@@ -93,30 +131,30 @@ class Caption(Renderable):
         field_instr = f" SEQ {category} \\* ARABIC "
 
         # begin run
-        r_begin = create_element("w:r", [_make_rPr(bold, italic, sz_val),
+        r_begin = create_element("w:r", [_make_rPr(bold, italic, underline, sz_val),
                                           create_element("w:fldChar", {"w:fldCharType": "begin"})])
         self._docx_paragraph._p.append(r_begin)
 
         # instrText run
         instr_elem = create_element("w:instrText", field_instr)
         instr_elem.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
-        r_instr = create_element("w:r", [_make_rPr(bold, italic, sz_val), instr_elem])
+        r_instr = create_element("w:r", [_make_rPr(bold, italic, underline, sz_val), instr_elem])
         self._docx_paragraph._p.append(r_instr)
 
         # separate run
-        r_sep = create_element("w:r", [_make_rPr(bold, italic, sz_val),
+        r_sep = create_element("w:r", [_make_rPr(bold, italic, underline, sz_val),
                                         create_element("w:fldChar", {"w:fldCharType": "separate"})])
         self._docx_paragraph._p.append(r_sep)
 
         # result run (cached number value)
         self._numbering_run = create_element("w:r", [
-            _make_rPr(bold, italic, sz_val),
+            _make_rPr(bold, italic, underline, sz_val),
             create_element("w:t", str(number) if number else "?"),
         ])
         self._docx_paragraph._p.append(self._numbering_run)
 
         # end run
-        r_end = create_element("w:r", [_make_rPr(bold, italic, sz_val),
+        r_end = create_element("w:r", [_make_rPr(bold, italic, underline, sz_val),
                                         create_element("w:fldChar", {"w:fldCharType": "end"})])
         self._docx_paragraph._p.append(r_end)
 
@@ -128,6 +166,7 @@ class Caption(Renderable):
             run_text = self._docx_paragraph.add_run(f"{CAPTION_SEPARATOR}{caption_info.text}")
             run_text.bold = bold
             run_text.italic = italic
+            run_text.underline = underline
             run_text.font.size = CAPTION_FONT_SIZE
 
     def center(self):

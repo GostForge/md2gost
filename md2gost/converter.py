@@ -32,7 +32,7 @@ class Converter:
         self._document: Document = docx.Document(template_path)
         self._document._body.clear_content()
         self._debugger = Debugger(self._document) if debug else None
-        self._parser = Parser(self._document)
+        self._parser = Parser(self._document, config=self._config)
         for path in input_paths:
             try:
                 with open(path, encoding="utf-8") as f:

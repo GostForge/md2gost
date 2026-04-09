@@ -16,6 +16,7 @@ from .caption import Caption, CaptionInfo
 from .paragraph import Paragraph
 from .renderable import Renderable
 from .requires_numbering import RequiresNumbering
+from ..config import Md2GostConfig, get_default_config
 from ..docx_elements import create_table
 from ..layout_tracker import LayoutState
 from ..rendered_info import RenderedInfo
@@ -26,8 +27,8 @@ from ..constants import (
     LISTING_CONTINUATION_PREFIX,
     LISTING_BORDER_HEIGHT,
     LISTING_PYGMENTS_STYLE,
-    CAPTION_SPACE_BEFORE_LISTING,
-    CAPTION_SPACE_AFTER_LISTING,
+    LISTING_CAPTION_SPACE_BEFORE,
+    LISTING_CAPTION_SPACE_AFTER,
     STYLE_CAPTION,
     STYLE_CODE,
     STYLE_NORMAL_TABLE,
@@ -61,11 +62,13 @@ class DocxParagraphPygmentsFormatter(Formatter):
 
 
 class Listing(Renderable, RequiresNumbering):
-    def __init__(self, parent, language: str, caption_info: CaptionInfo):
+    def __init__(self, parent, language: str, caption_info: CaptionInfo,
+                 config: Md2GostConfig | None = None):
         super().__init__(LISTING_CAPTION_CATEGORY, caption_info.unique_name if caption_info else None)
         self._caption_info = caption_info
         self._language = language
         self._parent = parent
+        self._config = config or get_default_config()
         self.paragraphs: list[Paragraph] = []
         self._number = None
 
@@ -110,7 +113,8 @@ class Listing(Renderable, RequiresNumbering):
             -> Generator[RenderedInfo | Renderable, None, None]:
         caption_rendered_infos = list(
             Caption(self._parent, LISTING_CAPTION_CATEGORY, self._caption_info, self._number, True,
-                   is_italic=True, space_before=CAPTION_SPACE_BEFORE_LISTING, space_after=CAPTION_SPACE_AFTER_LISTING)
+                   text_style=self._config.caption_listing_style,
+                   space_before=LISTING_CAPTION_SPACE_BEFORE, space_after=LISTING_CAPTION_SPACE_AFTER)
             .render(previous_rendered, copy(layout_state))
         )
         layout_state.add_height(sum([info.height for info in caption_rendered_infos]))

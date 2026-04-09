@@ -9,13 +9,15 @@ from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 
 from .renderable import *
 from .renderable import Renderable
+from .config import Md2GostConfig, get_default_config
 from . import extended_markdown
 from .warnings_collector import add_warning
 
 
 class RenderableFactory:
-    def __init__(self, parent: Parented):
+    def __init__(self, parent: Parented, config: Md2GostConfig | None = None):
         self._parent = parent
+        self._config = config or get_default_config()
 
     @singledispatchmethod
     def create(self, marko_element: extended_markdown.BlockElement,
@@ -66,7 +68,12 @@ class RenderableFactory:
         all_images = True
         for child in marko_paragraph.children:
             if isinstance(child, extended_markdown.Image):
-                yield Image(self._parent, child.dest, CaptionInfo(child.unique_name, child.title))
+                yield Image(
+                    self._parent,
+                    child.dest,
+                    CaptionInfo(child.unique_name, child.title),
+                    config=self._config,
+                )
             else:
                 all_images = False
 
@@ -84,7 +91,7 @@ class RenderableFactory:
 
     @create.register
     def _(self, marko_code_block: extended_markdown.FencedCode | extended_markdown.CodeBlock, caption_info: CaptionInfo):
-        listing = Listing(self._parent, marko_code_block.lang, caption_info)
+        listing = Listing(self._parent, marko_code_block.lang, caption_info, config=self._config)
 
         text = marko_code_block.children[0].children
         if marko_code_block.extra:
@@ -130,7 +137,7 @@ class RenderableFactory:
     @create.register
     def _(self, marko_table: extended_markdown.Table, caption_info: CaptionInfo):
         table = Table(self._parent, len(marko_table.children), len(marko_table.children[0].children),
-                      caption_info)
+                      caption_info, config=self._config)
         for i, row in enumerate(marko_table.children):
             for j, cell in enumerate(row.children):
                 paragraph = table.add_paragraph_to_cell(i, j)

@@ -8,6 +8,7 @@ from marko.block import BlankLine, Paragraph, CodeBlock, FencedCode, \
 from marko.inline import Image
 
 from .extended_markdown import markdown, Caption
+from .config import Md2GostConfig, get_default_config
 from .renderable.caption import CaptionInfo
 from .renderable.renderable import Renderable
 from .renderable_factory import RenderableFactory
@@ -18,10 +19,11 @@ logger = logging.getLogger(__name__)
 class Parser:
     """Parses given markdown string and returns Renderable elements"""
 
-    def __init__(self, document: Document):
+    def __init__(self, document: Document, config: Md2GostConfig | None = None):
         self._document = document
         self._renderables = []
-        self._factory = RenderableFactory(self._document._body)
+        self._config = config or get_default_config()
+        self._factory = RenderableFactory(self._document._body, config=self._config)
         self._caption_info: CaptionInfo | None = None
 
     @staticmethod

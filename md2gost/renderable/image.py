@@ -16,11 +16,18 @@ from docx.text.paragraph import Paragraph
 from .caption import Caption, CaptionInfo
 from .renderable import Renderable
 from .requires_numbering import RequiresNumbering
+from ..config import Md2GostConfig, get_default_config
 from ..layout_tracker import LayoutState
 from ..rendered_info import RenderedInfo
 from ..util import create_element
 from ..warnings_collector import add_warning
-from ..constants import IMAGE_CAPTION_CATEGORY, IMAGE_RESIZE_THRESHOLD, CAPTION_SPACE_BEFORE_IMAGE, CAPTION_SPACE_AFTER_IMAGE, LINE_SPACING_SINGLE
+from ..constants import (
+    IMAGE_CAPTION_CATEGORY,
+    IMAGE_RESIZE_THRESHOLD,
+    IMAGE_CAPTION_SPACE_BEFORE,
+    IMAGE_CAPTION_SPACE_AFTER,
+    LINE_SPACING_SINGLE,
+)
 
 _BLOCKED_SCHEMES = {"file", "ftp", "gopher", "data"}
 
@@ -45,9 +52,11 @@ def _is_safe_url(url: str) -> bool:
 
 
 class Image(Renderable, RequiresNumbering):
-    def __init__(self, parent: Parented, path: str, caption_info: CaptionInfo | None = None):
+    def __init__(self, parent: Parented, path: str, caption_info: CaptionInfo | None = None,
+                 config: Md2GostConfig | None = None):
         super().__init__(IMAGE_CAPTION_CATEGORY, caption_info.unique_name if caption_info else None)
         self._parent = parent
+        self._config = config or get_default_config()
         self._caption_info = caption_info
         self._docx_paragraph = Paragraph(create_element("w:p"), parent)
         self._docx_paragraph.paragraph_format.space_before = 0
@@ -113,7 +122,8 @@ class Image(Renderable, RequiresNumbering):
         height = self._image.height
 
         caption = Caption(self._parent, IMAGE_CAPTION_CATEGORY, self._caption_info, self._number, False,
-                         is_bold=True, is_italic=False, space_before=CAPTION_SPACE_BEFORE_IMAGE, space_after=CAPTION_SPACE_AFTER_IMAGE)
+                         text_style=self._config.caption_image_style,
+                         space_before=IMAGE_CAPTION_SPACE_BEFORE, space_after=IMAGE_CAPTION_SPACE_AFTER)
         caption.center()
 
         caption_rendered_infos = list(caption.render(None, copy(layout_state)))

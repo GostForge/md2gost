@@ -1,141 +1,146 @@
-"""
-ГОСТ-константы и магические числа md2gost.
+"""ГОСТ-константы и магические числа md2gost.
 
-Все значения, захардкоженные ранее по разным файлам, собраны здесь.
-Источник: OUT.md (Правила оформления курсовой работы / ВКР по ГОСТ).
-
-Единицы измерения:
-  - Размеры в docx хранятся в EMU (English Metric Units), 1 inch = 914400 EMU
-  - Pt(1) = 12700 EMU, Cm(1) = 360000 EMU, Mm(1) = 36000 EMU, Twips(1) = 635 EMU
+Единый стиль: параметры сгруппированы по доменным категориям.
+Источник: OUT.md (правила оформления по ГОСТ).
 """
 
-from docx.shared import Pt, Cm, Mm, Twips
+from enum import IntFlag, auto
+
+from docx.shared import Cm, Mm, Pt
 
 
-# ─── Поля страницы (ГОСТ п. 1.5) ────────────────────────────────────────────
-PAGE_MARGIN_LEFT = Cm(3.0)        # Левое — 30 мм  (ГОСТ: 30 мм)
-PAGE_MARGIN_RIGHT = Cm(1.0)       # Правое — 10 мм (ГОСТ: 10 мм)
-PAGE_MARGIN_TOP = Cm(2.0)         # Верхнее — 20 мм (ГОСТ: 20 мм)
-PAGE_MARGIN_BOTTOM = Cm(2.0)      # Нижнее — 20 мм  (ГОСТ: 20 мм)
+class CaptionTextStyle(IntFlag):
+    """Bit flags for caption text decoration.
 
-# NB: В Template.docx left_margin=2.50 cm (а не 3.0!) и bottom_margin=1.25 cm.
-# Код converter.py фактически использует BOTTOM_MARGIN_EFFECTIVE для расчёта
-# высоты страницы (с учётом footer). Оригинальное значение: Cm(1.86).
-BOTTOM_MARGIN_EFFECTIVE = Cm(1.86)
+    Пример комбинирования:
+      CaptionTextStyle.BOLD | CaptionTextStyle.UNDERLINE
+    """
 
-# ─── Размеры страницы A4 ────────────────────────────────────────────────────
-PAGE_WIDTH_A4 = Mm(210)
-PAGE_HEIGHT_A4 = Mm(297)
+    NONE = 0
+    BOLD = auto()
+    ITALIC = auto()
+    UNDERLINE = auto()
 
 
-# ─── Основной текст (Таблица 1.1) ───────────────────────────────────────────
-FONT_MAIN = "Times New Roman"
-FONT_SIZE_MAIN = Pt(14)           # 14 пт
-LINE_SPACING_MAIN = 1.5           # Полуторный
-LINE_SPACING_SINGLE = 1           # Одинарный (таблицы, рисунки)
-FIRST_LINE_INDENT = Cm(1.25)      # Отступ первой строки — 1,25 см
+# ─── Страницы / Layout ──────────────────────────────────────────────────────
+PAGE_WIDTH_A4 = Mm(210)            # Ширина страницы A4
+PAGE_HEIGHT_A4 = Mm(297)           # Высота страницы A4
+
+PAGE_MARGIN_LEFT = Cm(3.0)         # Левое поле: 30 мм
+PAGE_MARGIN_RIGHT = Cm(1.0)        # Правое поле: 10 мм
+PAGE_MARGIN_TOP = Cm(2.0)          # Верхнее поле: 20 мм
+PAGE_MARGIN_BOTTOM = Cm(2.0)       # Нижнее поле: 20 мм
+
+# NB: В Template.docx left_margin=2.50 cm и bottom_margin=1.25 cm.
+# В converter.py используется это значение для расчёта рабочей высоты.
+BOTTOM_MARGIN_EFFECTIVE = Cm(1.86)  # Эффективное нижнее поле для расчёта рабочей высоты
 
 
-# ─── Заголовки (Таблица 2.1) ────────────────────────────────────────────────
-# Заголовок 1-го уровня: 18 пт, полужирный, все прописные, с новой страницы
-HEADING1_FONT_SIZE = Pt(18)
-HEADING1_SPACE_BEFORE = Pt(0)
-HEADING1_SPACE_AFTER = Pt(12)
-
-# Заголовок 2-го уровня: 16 пт, полужирный
-HEADING2_FONT_SIZE = Pt(16)
-HEADING2_SPACE_BEFORE = Pt(24)
-HEADING2_SPACE_AFTER = Pt(12)
-
-# Заголовок 3+ уровня: 14 пт, полужирный
-HEADING3_FONT_SIZE = Pt(14)
-HEADING3_SPACE_BEFORE = Pt(24)
-HEADING3_SPACE_AFTER = Pt(12)
+# ─── Основной текст ─────────────────────────────────────────────────────────
+FONT_MAIN = "Times New Roman"      # Базовый шрифт основного текста
+FONT_SIZE_MAIN = Pt(14)             # Размер шрифта основного текста
+LINE_SPACING_MAIN = 1.5             # Межстрочный интервал основного текста
+LINE_SPACING_SINGLE = 1             # Одинарный интервал (служебные/внутритабличные абзацы)
+FIRST_LINE_INDENT = Cm(1.25)        # Красная строка основного текста
 
 
-# ─── Подписи / Captions ─────────────────────────────────────────────────────
-CAPTION_FONT_SIZE = Pt(12)
-CAPTION_SEPARATOR = " \u2014 "    # " — " (em dash), ГОСТ: через тире
+# ─── Заголовки ──────────────────────────────────────────────────────────────
+HEADING1_FONT_SIZE = Pt(18)         # Размер заголовка 1 уровня
+HEADING1_SPACE_BEFORE = Pt(0)       # Интервал перед заголовком 1 уровня
+HEADING1_SPACE_AFTER = Pt(12)       # Интервал после заголовка 1 уровня
 
-# Интервалы подписей (ГОСТ Таблицы 6.1, 7.1, 8.1)
-# Таблица: перед=6пт после=0; Рисунок: перед=0 после=6пт; Листинг: перед=6пт после=0
-CAPTION_SPACE_BEFORE_TABLE   = Pt(6)
-CAPTION_SPACE_BEFORE_IMAGE   = Pt(0)
-CAPTION_SPACE_BEFORE_LISTING = Pt(6)
-CAPTION_SPACE_AFTER_TABLE    = Pt(0)
-CAPTION_SPACE_AFTER_IMAGE    = Pt(6)
-CAPTION_SPACE_AFTER_LISTING  = Pt(0)
+HEADING2_FONT_SIZE = Pt(16)         # Размер заголовка 2 уровня
+HEADING2_SPACE_BEFORE = Pt(24)      # Интервал перед заголовком 2 уровня
+HEADING2_SPACE_AFTER = Pt(12)       # Интервал после заголовка 2 уровня
 
-
-# ─── Таблицы (Таблица 6.1, п. 6) ───────────────────────────────────────────
-TABLE_CONTENT_FONT_SIZE = Pt(12)
-TABLE_CELL_OFFSET = Pt(10)        # Компенсация внутренних padding ячеек
-TABLE_BORDER_HEIGHT = Pt(0.5)     # Высота одной горизонтальной линии таблицы
-TABLE_CAPTION_CATEGORY = "Таблица"
-TABLE_CONTINUATION_PREFIX = "Продолжение Таблицы"  # ГОСТ п. 6.3 — с большой «Т»
+HEADING3_FONT_SIZE = Pt(14)         # Размер заголовка 3+ уровня
+HEADING3_SPACE_BEFORE = Pt(24)      # Интервал перед заголовком 3+ уровня
+HEADING3_SPACE_AFTER = Pt(12)       # Интервал после заголовка 3+ уровня
 
 
-# ─── Рисунки (Таблица 7.1, п. 7) ───────────────────────────────────────────
-IMAGE_CAPTION_CATEGORY = "Рисунок"
-IMAGE_RESIZE_THRESHOLD = 0.7      # Порог сжатия: если 70% картинки влезает, уменьшаем
+# ─── Подписи: общие параметры ──────────────────────────────────────────────
+CAPTION_FONT_SIZE = Pt(12)          # Базовый размер шрифта подписи
+CAPTION_SEPARATOR = " \u2014 "      # Разделитель между номером и текстом подписи
 
 
-# ─── Формулы (раздел 5) ─────────────────────────────────────────────────────
-EQUATION_CAPTION_CATEGORY = "Формула"
-EQUATION_DEFAULT_HEIGHT = Pt(50)   # TODO: рассчитывать высоту формулы динамически
-EQUATION_NUMBER_CELL_WIDTH = Pt(30)
+# ─── Таблицы ────────────────────────────────────────────────────────────────
+TABLE_CAPTION_CATEGORY = "Таблица"                                # Название категории подписи таблицы
+TABLE_CAPTION_TEXT_STYLE_DEFAULT = CaptionTextStyle.ITALIC        # Декорация подписи таблицы по умолчанию
+TABLE_CAPTION_SPACE_BEFORE = Pt(6)                                # Интервал перед подписью таблицы
+TABLE_CAPTION_SPACE_AFTER = Pt(0)                                 # Интервал после подписи таблицы
+
+TABLE_CONTENT_FONT_SIZE = Pt(12)                                  # Размер шрифта текста внутри таблицы
+TABLE_CELL_OFFSET = Pt(10)                                        # Компенсация внутреннего padding ячейки
+TABLE_BORDER_HEIGHT = Pt(0.5)                                     # Высота одной горизонтальной границы таблицы
+TABLE_CONTINUATION_PREFIX = "Продолжение Таблицы"                 # Префикс при переносе таблицы
+
+# Интервалы контекста таблицы
+SPACE_AFTER_TABLE = Cm(0.35)                                      # Интервал перед абзацем, следующим за таблицей
+SPACE_BEFORE_CAPTION_AFTER_TABLE = Cm(0.45)                       # Интервал перед подписью, идущей после таблицы
 
 
-# ─── Листинги (Таблица 8.1, п. 8) ──────────────────────────────────────────
-FONT_CODE = "Courier New"
-FONT_SIZE_CODE = Pt(10)           # ГОСТ: 10 пт  (в Template.docx: 12 пт!)
-LISTING_CAPTION_CATEGORY = "Листинг"
-LISTING_CONTINUATION_PREFIX = "Продолжение Листинга"  # С большой «Л»
-LISTING_OFFSET = Pt(14)           # Компенсация внутренних padding рамки листинга
-LISTING_BORDER_HEIGHT = Pt(1)     # Суммарная высота верхней и нижней границ рамки
-LISTING_PYGMENTS_STYLE = "sas"    # Pygments colour scheme для подсветки синтаксиса
+# ─── Рисунки ────────────────────────────────────────────────────────────────
+IMAGE_CAPTION_CATEGORY = "Рисунок"                                # Название категории подписи рисунка
+IMAGE_CAPTION_TEXT_STYLE_DEFAULT = CaptionTextStyle.BOLD          # Декорация подписи рисунка по умолчанию
+IMAGE_CAPTION_SPACE_BEFORE = Pt(0)                                # Интервал перед подписью рисунка
+IMAGE_CAPTION_SPACE_AFTER = Pt(6)                                 # Интервал после подписи рисунка
+
+IMAGE_RESIZE_THRESHOLD = 0.7                                      # Порог сжатия изображения при нехватке места
 
 
-# ─── Списки (Таблица 4.1, п. 4) ────────────────────────────────────────────
-LIST_MARKER_UNORDERED = "●"       # Допустимые по ГОСТ: «--», «―», «●», «■», «○»
-LIST_MARKER_INDENT = Cm(1.0)      # Расстояние от маркера до текста (ГОСТ: текст на 2.25, маркер на 1.25)
-LIST_LEVEL_INDENT = Cm(1.0)       # Дополнительный отступ на каждый уровень вложенности
-LIST_TAB_STOP = Cm(1.0)           # Табуляция от начала абзаца до текста
+# ─── Листинги ───────────────────────────────────────────────────────────────
+LISTING_CAPTION_CATEGORY = "Листинг"                              # Название категории подписи листинга
+LISTING_CAPTION_TEXT_STYLE_DEFAULT = CaptionTextStyle.ITALIC      # Декорация подписи листинга по умолчанию
+LISTING_CAPTION_SPACE_BEFORE = Pt(6)                              # Интервал перед подписью листинга
+LISTING_CAPTION_SPACE_AFTER = Pt(0)                               # Интервал после подписи листинга
+
+FONT_CODE = "Courier New"                                         # Базовый шрифт кода в листингах
+FONT_SIZE_CODE = Pt(10)                                           # Размер шрифта кода в листингах
+LISTING_CONTINUATION_PREFIX = "Продолжение Листинга"              # Префикс при переносе листинга
+LISTING_OFFSET = Pt(14)                                           # Компенсация внутреннего padding рамки листинга
+LISTING_BORDER_HEIGHT = Pt(1)                                     # Суммарная высота верхней+нижней границы листинга
+LISTING_PYGMENTS_STYLE = "sas"                                    # Цветовая схема подсветки Pygments
 
 
-# ─── Содержание (TOC) ──────────────────────────────────────────────────────
-TOC_ENTRY_SPACE_AFTER = Cm(0.18)
-TOC_LEVEL_INDENT = "    "          # 4 пробела — визуальный отступ на уровень вложенности TOC
+# ─── Формулы ────────────────────────────────────────────────────────────────
+EQUATION_CAPTION_CATEGORY = "Формула"                             # Название категории нумерации формул
+EQUATION_CAPTION_TEXT_STYLE_DEFAULT = CaptionTextStyle.NONE       # Декорация подписи формулы по умолчанию
+
+EQUATION_DEFAULT_HEIGHT = Pt(50)                                  # Базовая высота строки формулы
+EQUATION_NUMBER_CELL_WIDTH = Pt(30)                               # Ширина ячейки с номером формулы
 
 
-# ─── Интервалы после таблиц/caption (п. 6.6, и код) ────────────────────────
-SPACE_AFTER_TABLE = Cm(0.35)      # Перед абзацем, следующим за таблицей
-SPACE_BEFORE_CAPTION_AFTER_TABLE = Cm(0.45)  # Перед caption, идущим после таблицы
+# ─── Списки ─────────────────────────────────────────────────────────────────
+LIST_MARKER_UNORDERED = "●"                                       # Маркер маркированного списка по умолчанию
+LIST_MARKER_INDENT = Cm(1.0)                                      # Отступ от начала абзаца до маркера
+LIST_LEVEL_INDENT = Cm(1.0)                                       # Дополнительный отступ на каждый уровень вложенности
+LIST_TAB_STOP = Cm(1.0)                                           # Позиция таб-стопа после маркера
 
 
-# ─── Orphan / widow control ─────────────────────────────────────────────────
-ORPHAN_CONTROL_LINES = 3          # heading/caption: page-break если < N строк влезает после
+# ─── TOC ────────────────────────────────────────────────────────────────────
+TOC_ENTRY_SPACE_AFTER = Cm(0.18)                                  # Интервал после строки в содержании
+TOC_LEVEL_INDENT = "    "                                         # Строковый отступ на уровень вложенности TOC
 
 
-# ─── ParagraphSizer: хардкоженные line_height ───────────────────────────────
-# Эмпирические значения, потому что FreeType не даёт точного line_height для docx.
-LINE_HEIGHT_TIMES_14 = Pt(16.05)
-LINE_HEIGHT_COURIER_12 = Pt(13.61)
-SPACE_WIDTH_CORRECTION = 0.81     # Эмпирический множитель ширины пробела (non-mono)
+# ─── Page layout heuristics ────────────────────────────────────────────────
+ORPHAN_CONTROL_LINES = 3                                          # Минимум строк после заголовка/подписи до переноса страницы
+
+# ParagraphSizer (эмпирика FreeType/docx)
+LINE_HEIGHT_TIMES_14 = Pt(16.05)                                  # Эмпирическая высота строки Times New Roman 14
+LINE_HEIGHT_COURIER_12 = Pt(13.61)                                # Эмпирическая высота строки Courier New 12
+SPACE_WIDTH_CORRECTION = 0.81                                     # Поправка ширины пробела для non-mono шрифтов
+
+# PageBreak
+PAGE_BREAK_FONT_SIZE = Pt(1)                                      # Технический размер шрифта для невидимого page-break абзаца
 
 
-# ─── PageBreak ──────────────────────────────────────────────────────────────
-PAGE_BREAK_FONT_SIZE = Pt(1)      # Размер шрифта для невидимого абзаца PageBreak
-
-
-# ─── Имена стилей в Template.docx ──────────────────────────────────────────
-# Весь код обращается к стилям по строковым именам — собраны здесь для единообразия.
-STYLE_NORMAL = "Normal"
-STYLE_HEADING_PREFIX = "Heading"   # "Heading 1", "Heading 2", ...
-STYLE_CAPTION = "Caption"
-STYLE_CODE = "Code"
-STYLE_TABLE_GRID = "Table Grid"
-STYLE_NORMAL_TABLE = "Normal Table"
-STYLE_FORMULA_CONTENT = "Formula Content"
-STYLE_FORMULA_NUMBERING = "Formula Numbering"
-STYLE_HYPERLINK = "Hyperlink"
+# ─── Style names in Template.docx ───────────────────────────────────────────
+STYLE_NORMAL = "Normal"                                           # Стиль основного абзаца
+STYLE_HEADING_PREFIX = "Heading"                                  # Префикс стилей заголовков (Heading 1..9)
+STYLE_CAPTION = "Caption"                                         # Стиль подписи
+STYLE_CODE = "Code"                                               # Стиль абзаца кода
+STYLE_TABLE_GRID = "Table Grid"                                   # Табличный стиль по умолчанию
+STYLE_NORMAL_TABLE = "Normal Table"                               # Базовый стиль таблицы
+STYLE_FORMULA_CONTENT = "Formula Content"                         # Стиль левой ячейки формулы
+STYLE_FORMULA_NUMBERING = "Formula Numbering"                     # Стиль правой ячейки нумерации формулы
+STYLE_HYPERLINK = "Hyperlink"                                     # Стиль гиперссылки

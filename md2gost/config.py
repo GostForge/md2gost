@@ -9,8 +9,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from docx.shared import Pt, Cm, Twips, Length
+from dataclasses import dataclass
+from docx.shared import Length
 
 from . import constants as C
 
@@ -52,6 +52,11 @@ class Md2GostConfig:
     caption_image: str = C.IMAGE_CAPTION_CATEGORY
     caption_listing: str = C.LISTING_CAPTION_CATEGORY
     caption_equation: str = C.EQUATION_CAPTION_CATEGORY
+    # Оформление подписей через bit flags (можно комбинировать через |)
+    caption_table_style: C.CaptionTextStyle = C.TABLE_CAPTION_TEXT_STYLE_DEFAULT
+    caption_image_style: C.CaptionTextStyle = C.IMAGE_CAPTION_TEXT_STYLE_DEFAULT
+    caption_listing_style: C.CaptionTextStyle = C.LISTING_CAPTION_TEXT_STYLE_DEFAULT
+    caption_equation_style: C.CaptionTextStyle = C.EQUATION_CAPTION_TEXT_STYLE_DEFAULT
 
     # ── Продолжения при переносе ────────────────────────────────────────
     table_continuation: str = C.TABLE_CONTINUATION_PREFIX

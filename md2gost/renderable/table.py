@@ -7,13 +7,14 @@ from . import Paragraph
 from .caption import Caption, CaptionInfo
 from .renderable import Renderable
 from .requires_numbering import RequiresNumbering
+from ..config import Md2GostConfig, get_default_config
 from ..constants import (
     TABLE_CELL_OFFSET as CELL_OFFSET,
     TABLE_BORDER_HEIGHT,
     TABLE_CAPTION_CATEGORY,
     TABLE_CONTINUATION_PREFIX,
-    CAPTION_SPACE_BEFORE_TABLE,
-    CAPTION_SPACE_AFTER_TABLE,
+    TABLE_CAPTION_SPACE_BEFORE,
+    TABLE_CAPTION_SPACE_AFTER,
     LINE_SPACING_SINGLE,
     STYLE_CAPTION,
     STYLE_NORMAL_TABLE,
@@ -25,9 +26,11 @@ from ..rendered_info import RenderedInfo
 
 
 class Table(Renderable, RequiresNumbering):
-    def __init__(self, parent: Parented, rows: int, cols: int, caption_info: CaptionInfo):
+    def __init__(self, parent: Parented, rows: int, cols: int, caption_info: CaptionInfo,
+                 config: Md2GostConfig | None = None):
         super().__init__(TABLE_CAPTION_CATEGORY, caption_info.unique_name if caption_info else None)
         self._parent = parent
+        self._config = config or get_default_config()
         self._caption_info = caption_info
         self._cols = cols
 
@@ -58,7 +61,8 @@ class Table(Renderable, RequiresNumbering):
             -> Generator[RenderedInfo | Renderable, None, None]:
         caption_rendered_infos = list(
             Caption(self._parent, TABLE_CAPTION_CATEGORY, self._caption_info, self._number, True,
-                   is_italic=True, space_before=CAPTION_SPACE_BEFORE_TABLE, space_after=CAPTION_SPACE_AFTER_TABLE)
+                   text_style=self._config.caption_table_style,
+                   space_before=TABLE_CAPTION_SPACE_BEFORE, space_after=TABLE_CAPTION_SPACE_AFTER)
             .render(previous_rendered, copy(layout_state))
         )
         layout_state.add_height(sum([info.height for info in caption_rendered_infos]))
