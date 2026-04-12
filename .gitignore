@@ -168,3 +168,4 @@ cython_debug/
 *~
 *.swp
 *.swo
+PROJECT_MAP.md
