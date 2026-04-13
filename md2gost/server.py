@@ -361,12 +361,33 @@ def _send_callback(url: str, job: JobInfo):
         logger.warning("Failed to send callback to %s: %s", url, e)
 
 
+def _get_workers() -> int:
+    raw_value = os.environ.get("MD2GOST_WORKERS", "1")
+    try:
+        workers = int(raw_value)
+    except ValueError:
+        logger.warning("Invalid MD2GOST_WORKERS=%r, using 1", raw_value)
+        return 1
+
+    if workers < 1:
+        logger.warning("Invalid MD2GOST_WORKERS=%r, using 1", raw_value)
+        return 1
+
+    return workers
+
+
 def run_server():
     """Entry point for running the server directly."""
     import uvicorn
     host = os.environ.get("MD2GOST_HOST", "0.0.0.0")
     port = int(os.environ.get("MD2GOST_PORT", "8000"))
-    uvicorn.run(app, host=host, port=port, log_level="info")
+    workers = _get_workers()
+
+    if workers > 1:
+        # Uvicorn requires import string app reference for multi-process workers.
+        uvicorn.run("md2gost.server:app", host=host, port=port, log_level="info", workers=workers)
+    else:
+        uvicorn.run(app, host=host, port=port, log_level="info")
 
 
 if __name__ == "__main__":
