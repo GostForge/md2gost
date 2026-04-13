@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from functools import cached_property
+from functools import cached_property, lru_cache
 from math import ceil
 
 from docx.enum.text import WD_LINE_SPACING
@@ -21,20 +21,35 @@ from ..util import merge_objects
 
 
 class Font:
-    def __init__(self, name: str, bold: bool, italic: bool, size_pt: int):
+    @classmethod
+    @lru_cache(maxsize=128)
+    def from_signature(cls, name: str, bold: bool, italic: bool, size_pt: int | float) -> "Font":
+        return cls(name, bool(bold), bool(italic), size_pt)
+
+    def __init__(self, name: str, bold: bool, italic: bool, size_pt: int | float):
         path = find_font(name, bold, italic)
         self._freetypefont = ImageFont.truetype(path, size_pt)
         self._draw = ImageDraw.Draw(Image.new("RGB", (1000, 1000)))
+        self._width_cache: dict[str, Length] = {}
 
         self._face = Face(path)
         self._face.set_char_size(int(size_pt * 64))
 
     def get_text_width(self, text: str) -> Length:
+        if len(text) <= 128:
+            cached = self._width_cache.get(text)
+            if cached is not None:
+                return cached
+
         if not self.is_mono:
             bbox = self._draw.textbbox((0, 0), text, self._freetypefont)
-            return Pt(bbox[2] - bbox[0])
+            width = Pt(bbox[2] - bbox[0])
         else:
-            return Pt(len(text) * self._face.glyph.advance.x / 64)
+            width = Pt(len(text) * self._face.glyph.advance.x / 64)
+
+        if len(text) <= 128:
+            self._width_cache[text] = width
+        return width
 
     def get_line_height(self) -> Length:
         # TODO: make it work for all fonts
@@ -119,7 +134,8 @@ class ParagraphSizer:
         lines = 1
         line_width = first_line_indent
 
-        space_width = Font(docx_font.name, docx_font.bold, docx_font.italic, docx_font.size.pt).get_text_width(" ")
+        space_font = Font.from_signature(docx_font.name, docx_font.bold, docx_font.italic, docx_font.size.pt)
+        space_width = space_font.get_text_width(" ")
         if not is_mono:
             space_width *= SPACE_WIDTH_CORRECTION
 
@@ -131,11 +147,21 @@ class ParagraphSizer:
                 word_part = ""
                 word_parts_widths.append(0)
 
-            run_docx_font = merge_objects(
-                docx_font,
-                run.font
-            )
-            font = Font(run_docx_font.name, run_docx_font.bold, run_docx_font.italic, run_docx_font.size.pt)
+            run_font = run.font
+            run_name = run_font.name if run_font.name is not None else docx_font.name
+            run_bold = run_font.bold if run_font.bold is not None else docx_font.bold
+            run_italic = run_font.italic if run_font.italic is not None else docx_font.italic
+            run_size = run_font.size.pt if run_font.size is not None else docx_font.size.pt
+
+            # Fallback to reflective merge only for rare incomplete font signatures.
+            if run_name is None or run_size is None:
+                run_docx_font = merge_objects(docx_font, run_font)
+                run_name = run_docx_font.name
+                run_bold = run_docx_font.bold
+                run_italic = run_docx_font.italic
+                run_size = run_docx_font.size.pt
+
+            font = Font.from_signature(run_name, run_bold, run_italic, run_size)
 
             run_text = run.text
             if run_text == "" and run._element.xpath("w:noBreakHyphen"):
@@ -187,7 +213,7 @@ class ParagraphSizer:
         max_width -= (paragraph_format.left_indent or 0) + \
             (paragraph_format.right_indent or 0)
 
-        font = Font(docx_font.name, docx_font.bold, docx_font.italic, docx_font.size.pt)
+        font = Font.from_signature(docx_font.name, docx_font.bold, docx_font.italic, docx_font.size.pt)
 
         # here self.paragraph.runs is not used because
         # it does not always return all runs (e.g. if they are inside hyperlink)
