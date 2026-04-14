@@ -27,6 +27,7 @@ class Font:
         return cls(name, bool(bold), bool(italic), size_pt)
 
     def __init__(self, name: str, bold: bool, italic: bool, size_pt: int | float):
+        self._requested_name = name
         path = find_font(name, bold, italic)
         self._freetypefont = ImageFont.truetype(path, size_pt)
         self._draw = ImageDraw.Draw(Image.new("RGB", (1000, 1000)))
@@ -54,9 +55,18 @@ class Font:
     def get_line_height(self) -> Length:
         # TODO: make it work for all fonts
         config = get_default_config()
-        if "Times" in str(self._face.family_name) and self._freetypefont.size == 14:
+        resolved_family = str(self._face.family_name)
+        requested_family = self._requested_name or ""
+
+        if (
+            self._freetypefont.size == 14
+            and ("Times" in resolved_family or "Times" in requested_family)
+        ):
             return config.line_height_times_14
-        if "Courier" in str(self._face.family_name) and self._freetypefont.size == 12:
+        if (
+            self._freetypefont.size == 12
+            and ("Courier" in resolved_family or "Courier" in requested_family)
+        ):
             return config.line_height_courier_12
         else:
             return Pt(self._face.size.height / 64)

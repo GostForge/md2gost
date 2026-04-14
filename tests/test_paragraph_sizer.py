@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 
 import docx
 from docx import Document
@@ -55,6 +56,22 @@ class TestFont(unittest.case.TestCase):
 
     def test_get_line_height_courier(self):
         font = Font("Courier New", False, False, 12)
+        self.assertAlmostEqual(18.3, font.get_line_height() / _EMUS_PER_PX, delta=delta)
+
+    def test_get_line_height_times_with_fallback_family(self):
+        font = Font("Times New Roman", False, False, 14)
+        font._face = SimpleNamespace(
+            family_name=b"Liberation Serif",
+            size=SimpleNamespace(height=17 * 64),
+        )
+        self.assertAlmostEqual(21.4, font.get_line_height() / _EMUS_PER_PX, delta=delta)
+
+    def test_get_line_height_courier_with_fallback_family(self):
+        font = Font("Courier New", False, False, 12)
+        font._face = SimpleNamespace(
+            family_name=b"Liberation Mono",
+            size=SimpleNamespace(height=19 * 64),
+        )
         self.assertAlmostEqual(18.3, font.get_line_height() / _EMUS_PER_PX, delta=delta)
 
     def test_is_mono_courier(self):
