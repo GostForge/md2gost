@@ -26,9 +26,16 @@ jobs:
         python-version: "3.11"
     - name: Install dependencies
       run: |
-        echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true | sudo debconf-set-selections
         sudo apt-get update -qq
-        sudo apt-get install -y --no-install-recommends ttf-mscorefonts-installer
+        sudo apt-get install -y --no-install-recommends fontconfig fonts-dejavu-core fonts-liberation2
+        for pkg in fonts-crosextra-carlito fonts-crosextra-caladea; do
+          if apt-cache show "$pkg" >/dev/null 2>&1; then
+            sudo apt-get install -y --no-install-recommends "$pkg"
+          else
+            echo "Optional font package '$pkg' is unavailable; continuing"
+          fi
+        done
+        sudo fc-cache -f
         python -m pip install --upgrade pip
         python -m venv venv
         source venv/bin/activate

@@ -1,7 +1,33 @@
 from sys import platform, exit
 import subprocess
 import logging
+import importlib
 from functools import cache
+
+
+TIMES_NEW_ROMAN = "Times New Roman"
+CALIBRI = "Calibri"
+ARIAL = "Arial"
+COURIER_NEW = "Courier New"
+CONSOLAS = "Consolas"
+
+
+def _resolve_fc_match(pattern: str):
+    """Return fc-match output lines for pattern or None on command failure."""
+    try:
+        result = subprocess.run(
+            ["fc-match", "--format=%{file}\\n%{family}\\n%{weight}\\n%{slant}", pattern],
+            check=True, capture_output=True, text=True,
+        )
+        return result.stdout.strip().splitlines()
+    except subprocess.CalledProcessError as exc:
+        logging.warning("fc-match failed for '%s': %s", pattern, exc)
+        return None
+
+
+def _candidate_matches_family(candidate: str, resolved_family: str) -> bool:
+    candidate_words = candidate.lower().split()
+    return any(word in resolved_family.lower() for word in candidate_words)
 
 
 def __find_font_linux(name: str, bold: bool, italic: bool):
@@ -15,49 +41,41 @@ def __find_font_linux(name: str, bold: bool, italic: bool):
 
     # Try the exact requested family first, then fallback aliases.
     aliases = {
-        "Times New Roman": ["Times New Roman", "Liberation Serif"],
-        "Calibri":         ["Calibri", "Carlito"],
-        "Arial":           ["Arial", "Liberation Sans"],
-        "Courier New":     ["Courier New", "Liberation Mono"],
-        "Consolas":        ["Consolas", "Liberation Mono", "Courier New"],
+        TIMES_NEW_ROMAN: [TIMES_NEW_ROMAN, "Liberation Serif"],
+        CALIBRI: [CALIBRI, "Carlito"],
+        ARIAL: [ARIAL, "Liberation Sans"],
+        COURIER_NEW: [COURIER_NEW, "Liberation Mono"],
+        CONSOLAS: [CONSOLAS, "Liberation Mono", COURIER_NEW],
     }
     candidates = aliases.get(name, [name])
 
     for candidate in candidates:
         pattern = f"{candidate}:weight={weight}:slant={slant}"
-        try:
-            result = subprocess.run(
-                ["fc-match", "--format=%{file}\\n%{family}\\n%{weight}\\n%{slant}", pattern],
-                check=True, capture_output=True, text=True,
-            )
-            lines = result.stdout.strip().splitlines()
-            if not lines:
-                continue
-            path = lines[0].strip()
-            if not path:
-                continue
-
-            # Sanity-check: make sure fontconfig actually gave us the right
-            # family (it may silently fall back to a totally different font).
-            resolved_family = lines[1].strip() if len(lines) > 1 else ""
-            # Accept if any word of the requested name appears in the resolved family
-            name_words = name.lower().split()
-            if not any(w in resolved_family.lower() for w in name_words):
-                logging.debug(
-                    "fc-match returned '%s' for '%s' — skipping (family mismatch)",
-                    resolved_family, candidate,
-                )
-                continue
-
-            logging.debug("find_font('%s', bold=%s, italic=%s) → %s", name, bold, italic, path)
-            return path
-
-        except subprocess.CalledProcessError as exc:
-            logging.warning("fc-match failed for '%s': %s", pattern, exc)
+        lines = _resolve_fc_match(pattern)
+        if not lines:
             continue
 
+        path = lines[0].strip()
+        if not path:
+            continue
+
+        # Sanity-check: make sure fontconfig actually gave us the right
+        # family (it may silently fall back to a totally different font).
+        resolved_family = lines[1].strip() if len(lines) > 1 else ""
+        # Accept if the resolved family matches the current candidate
+        # (needed for fallback aliases like Calibri -> Carlito).
+        if not _candidate_matches_family(candidate, resolved_family):
+            logging.debug(
+                "fc-match returned '%s' for '%s' — skipping (family mismatch)",
+                resolved_family, candidate,
+            )
+            continue
+
+        logging.debug("find_font('%s', bold=%s, italic=%s) → %s", name, bold, italic, path)
+        return path
+
     # Hard fallback — pick any monospace or serif font
-    fallback_pattern = "mono" if name in ("Courier New", "Consolas") else "serif"
+    fallback_pattern = "mono" if name in (COURIER_NEW, CONSOLAS) else "serif"
     try:
         result = subprocess.run(
             ["fc-match", "--format=%{file}", fallback_pattern],
@@ -80,8 +98,8 @@ def find_font(name: str, bold: bool, italic: bool):
     if platform == "linux":
         return __find_font_linux(name, bold, italic)
     else:
-        from matplotlib.font_manager import findfont, FontProperties
-        return findfont(FontProperties(
+        font_manager = importlib.import_module("matplotlib.font_manager")
+        return font_manager.findfont(font_manager.FontProperties(
             family=name,
             weight="bold" if bold else "normal",
             style="italic" if italic else "normal"), fallback_to_default=False)

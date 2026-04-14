@@ -2,20 +2,20 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# System deps for python-docx, freetype, pillow, font discovery and MS fonts
+# System deps for python-docx, freetype, pillow and font discovery.
+# Install open metric-compatible fonts to avoid proprietary repo dependencies.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-  libfreetype6 libfreetype6-dev fontconfig fonts-dejavu-core gcc \
-  cabextract wget xfonts-utils && \
-    echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" \
-      | debconf-set-selections && \
-    apt-get install -y --no-install-recommends ttf-mscorefonts-installer && \
-    wget -q https://gist.githubusercontent.com/maxwelleite/10774746/raw/ttf-vista-fonts-installer.sh -O /tmp/vista.sh && \
-    bash /tmp/vista.sh && rm /tmp/vista.sh && \
+  libfreetype6 libfreetype6-dev fontconfig fonts-dejavu-core fonts-liberation2 gcc && \
+    for pkg in fonts-crosextra-carlito fonts-crosextra-caladea; do \
+      if apt-cache show "$pkg" > /dev/null 2>&1; then \
+        apt-get install -y --no-install-recommends "$pkg"; \
+      else \
+        echo "Optional font package '$pkg' is unavailable in this distro; continuing"; \
+      fi; \
+    done && \
     fc-cache -f && \
-    rm -rf /var/lib/apt/lists/*
-
-# Install poetry
-RUN pip install --no-cache-dir poetry
+    rm -rf /var/lib/apt/lists/* && \
+    pip install --no-cache-dir poetry
 
 # Copy project definition
 COPY pyproject.toml poetry.lock* ./
