@@ -2,19 +2,34 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# System deps for python-docx, freetype, pillow and font discovery.
-# Install open metric-compatible fonts to avoid proprietary repo dependencies.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-  libfreetype6 libfreetype6-dev fontconfig fonts-dejavu-core fonts-liberation2 gcc && \
-    for pkg in fonts-crosextra-carlito fonts-crosextra-caladea; do \
-      if apt-cache show "$pkg" > /dev/null 2>&1; then \
-        apt-get install -y --no-install-recommends "$pkg"; \
-      else \
-        echo "Optional font package '$pkg' is unavailable in this distro; continuing"; \
+# System deps for python-docx, freetype, pillow and strict MS font setup.
+RUN set -eux; \
+    if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
+      sed -i \
+        's/^Components: .*/Components: main contrib non-free non-free-firmware/' \
+        /etc/apt/sources.list.d/debian.sources; \
+    elif [ -f /etc/apt/sources.list ]; then \
+      sed -i 's/ main$/ main contrib non-free non-free-firmware/' /etc/apt/sources.list; \
+    fi; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+      ca-certificates libfreetype6 libfreetype6-dev fontconfig gcc \
+      debconf-utils cabextract wget xfonts-utils fontforge; \
+    echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | debconf-set-selections; \
+    apt-get install -y --no-install-recommends ttf-mscorefonts-installer; \
+    wget -q https://gist.githubusercontent.com/maxwelleite/10774746/raw/ttf-vista-fonts-installer.sh -O /tmp/vista.sh; \
+    bash /tmp/vista.sh; \
+    rm -f /tmp/vista.sh; \
+    fc-cache -f; \
+    for family in "Times New Roman" "Courier New" "Calibri" "Consolas"; do \
+      resolved_family="$(fc-match --format='%{family}\n' "${family}:weight=regular:slant=roman")"; \
+      echo "${family} -> ${resolved_family}"; \
+      if ! printf '%s' "${resolved_family}" | tr ',' '\\n' | grep -Fxqi "${family}"; then \
+        echo "Required font '${family}' is not resolved exactly" >&2; \
+        exit 1; \
       fi; \
-    done && \
-    fc-cache -f && \
-    rm -rf /var/lib/apt/lists/* && \
+    done; \
+    rm -rf /var/lib/apt/lists/*; \
     pip install --no-cache-dir poetry
 
 # Copy project definition
