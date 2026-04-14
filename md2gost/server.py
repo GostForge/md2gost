@@ -122,7 +122,7 @@ def _classify_uploaded_files(
         asset_files.append(uploaded)
 
     if not markdown_files:
-        raise HTTPException(status_code=400, detail="At least one Markdown file (.md) is required in files[]")
+        raise HTTPException(status_code=400, detail="At least one Markdown file (.md) is required in files")
 
     markdown_files.sort(key=lambda upload: (upload.filename or "").replace("\\", "/").casefold())
 
@@ -289,7 +289,7 @@ async def convert_sync(
     title_pages: Optional[int] = Form(None, description="Number of title pages"),
 ):
     """
-    Synchronous conversion: upload project files in files[], receive DOCX immediately.
+    Synchronous conversion: upload project files in files, receive DOCX immediately.
     Markdown files are sorted by filename and merged in that order; template.docx
     and title.docx are recognized by name, all other files are treated as assets.
     """
@@ -342,7 +342,7 @@ async def create_job(
     callback_url: Optional[str] = Form(None, description="URL to POST result notification to"),
 ):
     """
-    Asynchronous conversion: creates a job from files[] and returns immediately.
+    Asynchronous conversion: creates a job from files and returns immediately.
     Poll GET /jobs/{id} for status, or supply callback_url for push notification.
     """
     job_id = str(uuid.uuid4())
