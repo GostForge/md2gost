@@ -1,16 +1,11 @@
 import logging
-import ipaddress
-import socket
+import os
 from copy import copy
-from io import BytesIO
 from typing import Generator
-from os import environ
-import os.path
 from urllib.parse import urlparse
 
-import requests
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
-from docx.shared import Parented, Length
+from docx.shared import Length, Parented
 from docx.text.paragraph import Paragraph
 
 from .caption import Caption, CaptionInfo
@@ -21,68 +16,73 @@ from ..layout_tracker import LayoutState
 from ..rendered_info import RenderedInfo
 from ..util import create_element
 from ..warnings_collector import add_warning
-from ..constants import (
-    IMAGE_CAPTION_CATEGORY,
-    IMAGE_RESIZE_THRESHOLD,
-    IMAGE_CAPTION_SPACE_BEFORE,
-    IMAGE_CAPTION_SPACE_AFTER,
-    LINE_SPACING_SINGLE,
-)
-
-_BLOCKED_SCHEMES = {"file", "ftp", "gopher", "data"}
 
 
-def _is_safe_url(url: str) -> bool:
-    """Reject URLs targeting private/internal addresses (SSRF protection)."""
-    try:
-        parsed = urlparse(url)
-        if parsed.scheme.lower() in _BLOCKED_SCHEMES:
-            return False
-        hostname = parsed.hostname
-        if not hostname:
-            return False
-        # Resolve DNS and check all IPs
-        for info in socket.getaddrinfo(hostname, None):
-            addr = ipaddress.ip_address(info[4][0])
-            if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
-                return False
-        return True
-    except Exception:
+_BLOCKED_PATH_TRAVERSAL = "__blocked_path_traversal__"
+_BLOCKED_EXTERNAL_REFERENCE = "__blocked_external_reference__"
+
+
+def _is_external_reference(path: str) -> bool:
+    if not isinstance(path, str):
         return False
+    parsed = urlparse(path)
+    return bool(parsed.scheme) or path.startswith("//")
+
+
+def _public_path_for_warning(path: str, source_path: str | None) -> str:
+    if source_path:
+        return source_path.replace("\\", "/")
+
+    if path.startswith("http"):
+        return path
+
+    normalized = path.replace("\\", "/")
+    return os.path.basename(normalized) or normalized
 
 
 class Image(Renderable, RequiresNumbering):
-    def __init__(self, parent: Parented, path: str, caption_info: CaptionInfo | None = None,
-                 config: Md2GostConfig | None = None):
-        super().__init__(IMAGE_CAPTION_CATEGORY, caption_info.unique_name if caption_info else None)
-        self._parent = parent
+    def __init__(
+        self,
+        parent: Parented,
+        path: str,
+        caption_info: CaptionInfo | None = None,
+        source_path: str | None = None,
+        config: Md2GostConfig | None = None,
+    ):
+        if not isinstance(path, str):
+            path = str(path)
+
         self._config = config or get_default_config()
+        unique_name = caption_info.unique_name if caption_info and caption_info.unique_name else ""
+        super().__init__(self._config.caption_image, unique_name)
+        self._parent = parent
         self._caption_info = caption_info
+        warning_path = _public_path_for_warning(path, source_path)
         self._docx_paragraph = Paragraph(create_element("w:p"), parent)
         self._docx_paragraph.paragraph_format.space_before = 0
         self._docx_paragraph.paragraph_format.space_after = 0
         self._docx_paragraph.paragraph_format.first_line_indent = 0
-        self._docx_paragraph.paragraph_format.line_spacing = LINE_SPACING_SINGLE
+        self._docx_paragraph.paragraph_format.line_spacing = self._config.line_spacing_single
         self._docx_paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
         self._invalid = False
 
         run = self._docx_paragraph.add_run()
 
-        if path.startswith("http"):
-            if not _is_safe_url(path):
-                msg = f"SSRF-блокировка: URL {path} указывает на внутренний адрес"
-                logging.warning(msg)
-                add_warning(msg)
-                self._invalid = True
-            else:
-                bytesio = BytesIO()
-                bytesio.write(requests.get(path, timeout=15).content)
-                self._image = run.add_picture(bytesio)
+        if path == _BLOCKED_EXTERNAL_REFERENCE or _is_external_reference(path):
+            msg = f"Внешние URL картинок запрещены политикой безопасности: {warning_path}"
+            logging.warning(msg)
+            add_warning(msg)
+            self._invalid = True
+        elif path == _BLOCKED_PATH_TRAVERSAL:
+            msg = f"Доступ к файлам вне рабочей директории запрещён: {warning_path}"
+            logging.warning(msg)
+            add_warning(msg)
+            self._invalid = True
         else:
             try:
                 self._image = run.add_picture(path)
             except FileNotFoundError:
-                msg = f"Путь {path} не существует, картинка не будет добавлена"
+                msg = f"Путь {warning_path} не существует, картинка не будет добавлена"
                 logging.warning(msg)
                 add_warning(msg)
                 self._invalid = True
@@ -105,32 +105,41 @@ class Image(Renderable, RequiresNumbering):
         self._image.width = Length(width)
         self._image.height = Length(height)
 
-    def render(self, previous_rendered: RenderedInfo, layout_state: LayoutState)\
-            -> Generator[RenderedInfo | Renderable, None, None]:
+    def render(
+        self,
+        previous_rendered: RenderedInfo,
+        layout_state: LayoutState,
+    ) -> Generator[RenderedInfo | Renderable, None, None]:
         if self._invalid:
             yield from []
             return
 
-        # limit width
         if self._image.width > layout_state.max_width:
             self.resize(width=layout_state.max_width)
 
-        # limit height
         if self._image.height > layout_state.max_height:
             self.resize(height=layout_state.max_height)
 
         height = self._image.height
 
-        caption = Caption(self._parent, IMAGE_CAPTION_CATEGORY, self._caption_info, self._number, False,
-                         text_style=self._config.caption_image_style,
-                         space_before=IMAGE_CAPTION_SPACE_BEFORE, space_after=IMAGE_CAPTION_SPACE_AFTER)
+        caption = Caption(
+            self._parent,
+            self._config.caption_image,
+            self._caption_info,
+            self._number,
+            False,
+            text_style=self._config.caption_image_style,
+            config=self._config,
+            space_before=self._config.caption_image_space_before,
+            space_after=self._config.caption_image_space_after,
+        )
         caption.center()
 
         caption_rendered_infos = list(caption.render(None, copy(layout_state)))
         caption_height = sum([info.height for info in caption_rendered_infos])
 
         if height + caption_height > layout_state.remaining_page_height:
-            if height * IMAGE_RESIZE_THRESHOLD <= (layout_state.remaining_page_height - caption_height):
+            if height * self._config.image_resize_threshold <= (layout_state.remaining_page_height - caption_height):
                 self.resize(height=layout_state.remaining_page_height - caption_height)
                 height = layout_state.remaining_page_height - caption_height
             else:

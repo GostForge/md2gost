@@ -1,6 +1,7 @@
 import logging
 import os
 from collections.abc import Generator
+from urllib.parse import urlparse
 
 from docx import Document
 from marko.block import BlankLine, Paragraph, CodeBlock, FencedCode, \
@@ -16,6 +17,10 @@ from .renderable_factory import RenderableFactory
 logger = logging.getLogger(__name__)
 
 
+_BLOCKED_PATH_TRAVERSAL = "__blocked_path_traversal__"
+_BLOCKED_EXTERNAL_REFERENCE = "__blocked_external_reference__"
+
+
 class Parser:
     """Parses given markdown string and returns Renderable elements"""
 
@@ -25,6 +30,13 @@ class Parser:
         self._config = config or get_default_config()
         self._factory = RenderableFactory(self._document._body, config=self._config)
         self._caption_info: CaptionInfo | None = None
+
+    @staticmethod
+    def _is_external_reference(path: str) -> bool:
+        if not isinstance(path, str):
+            return False
+        parsed = urlparse(path)
+        return bool(parsed.scheme) or path.startswith("//")
 
     @staticmethod
     def _safe_resolve(base_dir: str, relative_path: str) -> str | None:
@@ -47,23 +59,51 @@ class Parser:
         return resolved
 
     @staticmethod
+    def _resolve_image_paths(marko_paragraph: Paragraph, relative_dir_path: str):
+        for child in marko_paragraph.children:
+            if not isinstance(child, Image):
+                continue
+
+            if not isinstance(child.dest, str) or not child.dest.strip():
+                setattr(child, "source_dest", str(child.dest))
+                child.dest = _BLOCKED_PATH_TRAVERSAL
+                continue
+
+            setattr(child, "source_dest", child.dest)
+            if Parser._is_external_reference(child.dest):
+                child.dest = _BLOCKED_EXTERNAL_REFERENCE
+                continue
+
+            safe = Parser._safe_resolve(relative_dir_path, child.dest)
+            child.dest = safe if safe is not None else _BLOCKED_PATH_TRAVERSAL
+
+    @staticmethod
+    def _resolve_code_extra(marko_code: CodeBlock | FencedCode, relative_dir_path: str):
+        if not marko_code.extra:
+            return
+
+        if not isinstance(marko_code.extra, str):
+            setattr(marko_code, "source_extra", str(marko_code.extra))
+            marko_code.extra = _BLOCKED_PATH_TRAVERSAL
+            return
+
+        setattr(marko_code, "source_extra", marko_code.extra)
+
+        if Parser._is_external_reference(marko_code.extra):
+            marko_code.extra = _BLOCKED_EXTERNAL_REFERENCE
+            return
+
+        safe = Parser._safe_resolve(relative_dir_path, marko_code.extra)
+        marko_code.extra = safe if safe is not None else _BLOCKED_PATH_TRAVERSAL
+
+    @staticmethod
     def resolve_paths(marko_element: BlockElement, relative_dir_path: str):
         """Resolves relative paths in Marko elements (with traversal protection)."""
         if isinstance(marko_element, Paragraph):
-            for child in marko_element.children:
-                if isinstance(child, Image) and not child.dest.startswith("http"):
-                    safe = Parser._safe_resolve(relative_dir_path, child.dest)
-                    if safe is not None:
-                        child.dest = safe
-                    else:
-                        # Replace with obviously-invalid path so FileNotFoundError is raised later
-                        child.dest = "__blocked_path_traversal__"
-        if isinstance(marko_element, (CodeBlock, FencedCode)) and marko_element.extra:
-            safe = Parser._safe_resolve(relative_dir_path, marko_element.extra)
-            if safe is not None:
-                marko_element.extra = safe
-            else:
-                marko_element.extra = "__blocked_path_traversal__"
+            Parser._resolve_image_paths(marko_element, relative_dir_path)
+
+        if isinstance(marko_element, (CodeBlock, FencedCode)):
+            Parser._resolve_code_extra(marko_element, relative_dir_path)
 
     def parse(self, text, relative_dir_path: str) -> None:
         marko_parsed = markdown.parse(text)

@@ -1,14 +1,13 @@
-from copy import copy
 from typing import Generator
 from uuid import uuid4
 
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.text.paragraph import Paragraph as DocxParagraph
-from docx.shared import Parented, Length, Cm
+from docx.shared import Parented, Length
 
 from . import Renderable
 from .paragraph_sizer import ParagraphSizer
-from ..constants import FIRST_LINE_INDENT, STYLE_HEADING_PREFIX, ORPHAN_CONTROL_LINES
+from ..config import get_default_config
 from ..layout_tracker import LayoutState
 from .paragraph import Paragraph
 from ..rendered_info import RenderedInfo
@@ -18,6 +17,7 @@ from ..util import create_element
 class Heading(Paragraph):
     def __init__(self, parent: Parented, level: int, numbered: bool):
         super().__init__(parent)
+        self._config = get_default_config()
 
         self._numbered = numbered
         self._parent = parent
@@ -26,7 +26,7 @@ class Heading(Paragraph):
         if not 1 <= level <= 9:
             raise ValueError("Heading level must be in range from 1 to 9")
 
-        self.style = f"{STYLE_HEADING_PREFIX} {level}"
+        self.style = f"{self._config.style_heading_prefix} {level}"
 
         if not numbered:
             self._remove_numbering()
@@ -90,13 +90,13 @@ class Heading(Paragraph):
             self._docx_paragraph,
             previous_rendered.docx_element
             if previous_rendered and isinstance(previous_rendered.docx_element, DocxParagraph) else None,
-            layout_state.max_width, FIRST_LINE_INDENT).calculate_height()
+            layout_state.max_width, self._config.first_line_indent).calculate_height()
 
         if layout_state.current_page_height == 0 and layout_state.page != 1:
             height_data.before = 0
 
         # if a heading + 3 lines don't fit to the page, they go to the next page
-        if ((height_data.lines + ORPHAN_CONTROL_LINES - 1) * height_data.line_spacing + 1) * height_data.line_height\
+        if ((height_data.lines + self._config.orphan_control_lines - 1) * height_data.line_spacing + 1) * height_data.line_height\
                 > layout_state.remaining_page_height:
             self._docx_paragraph.paragraph_format.space_before = 0  # libreoffice fix
             height = height_data.full - height_data.before

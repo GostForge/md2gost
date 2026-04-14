@@ -4,8 +4,8 @@ from docx.oxml import CT_Tbl, CT_R
 from docx.shared import Parented, Length
 from docx.table import Table, _Row, _Cell
 
+from .config import get_default_config
 from .util import create_element
-from .constants import STYLE_TABLE_GRID
 
 
 __all__ = [
@@ -15,7 +15,10 @@ __all__ = [
 ]
 
 
-def create_table(parent: Parented, rows: int, cols, width: Length, style=STYLE_TABLE_GRID):
+def create_table(parent: Parented, rows: int, cols, width: Length, style: str | None = None):
+    if style is None:
+        style = get_default_config().style_table_grid
+
     table = Table(CT_Tbl.new_tbl(rows, cols, width), parent)
     table.style = style
 

@@ -27,6 +27,7 @@ docker run -p 8000:8000 md2gost
 | Endpoint | Метод | Описание |
 |---|---|---|
 | `/health` | GET | Проверка доступности сервиса |
+| `/config/reference` | GET | Эталонные параметры `Md2GostConfig` с описаниями и значениями по умолчанию |
 | `/convert` | POST | Синхронная конвертация Markdown → DOCX |
 | `/jobs` | POST | Создание асинхронной задачи (ответ 202) |
 | `/jobs/{id}` | GET | Получение статуса задачи |
@@ -51,6 +52,7 @@ docker run -p 8000:8000 md2gost
 
 - Генерация отчёта;
 - Добавление титульной страницы в формате DOCX;
+- Настройка генератора через `gostforge.yml`;
 - Генерация интерактивного содержания;
 - Поддержка сквозной нумерации и кросс-референсов;
 - Автоматическая нумерация рисунков, продолжений таблиц, листингов и т.д.
@@ -76,22 +78,45 @@ pipx install git+https://github.com/witelokk/md2gost.git@main
 ## Использование
 
 ```text
-(python -m ) md2gost [-h] [-o OUTPUT] [-T TITLE] [--title-pages TITLE_PAGES] [--syntax-highlighting | --no-syntax-highlighting] [--debug] [filenames ...]
+(python -m ) md2gost [-h] [-o OUTPUT] [-T TITLE] [-c CONFIG] [--syntax-highlighting | --no-syntax-highlighting] [--debug] [filenames ...]
 ```
 
 Если флаг `-o` не указан, итоговый отчёт создаётся с именем исходного файла и расширением `.docx`.
 
 ## Фичи
 
+### Конфигурация через gostforge.yml
+
+`md2gost` может читать параметры генерации из `gostforge.yml`.
+
+Поддерживаются:
+- как корневые ключи,
+- так и секции `md2gost` и `md2gost.generator`.
+
+Пример:
+
+```yaml
+md2gost:
+  title_pages: 2
+  syntax_highlighting: true
+  sectional_numbering: true
+  page_margin_left: 2.5cm
+  font_size_main: 13pt
+  caption_separator: " — "
+  caption_image_style: "bold"
+```
+
+`title_pages` задаётся через `gostforge.yml`.
+
 ### Добавление титульной страницы
 
 Чтобы добавить титульную страницу, используйте флаг `--title` (`-T`) с путём к DOCX-файлу титульника.
-Если в документе больше одной страницы, укажите количество через `--title-pages`.
+Если в документе больше одной страницы, укажите количество через `title_pages` в `gostforge.yml`.
 
 Пример:
 
 ```bash
-md2gost report.md --title title.docx --title-pages 2
+md2gost report.md --title title.docx
 ```
 
 ### Подписи рисунков, листингов, таблиц

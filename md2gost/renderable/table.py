@@ -1,26 +1,14 @@
 from copy import copy
 from typing import Generator
 
-from docx.shared import Parented, Pt, Twips
+from docx.shared import Parented, Twips
 
 from . import Paragraph
 from .caption import Caption, CaptionInfo
 from .renderable import Renderable
 from .requires_numbering import RequiresNumbering
 from ..config import Md2GostConfig, get_default_config
-from ..constants import (
-    TABLE_CELL_OFFSET as CELL_OFFSET,
-    TABLE_BORDER_HEIGHT,
-    TABLE_CAPTION_CATEGORY,
-    TABLE_CONTINUATION_PREFIX,
-    TABLE_CAPTION_SPACE_BEFORE,
-    TABLE_CAPTION_SPACE_AFTER,
-    LINE_SPACING_SINGLE,
-    STYLE_CAPTION,
-    STYLE_NORMAL_TABLE,
-    SPACE_AFTER_TABLE,
-)
-from ..docx_elements import *
+from ..docx_elements import create_table, create_table_cell, create_table_row
 from ..layout_tracker import LayoutState
 from ..rendered_info import RenderedInfo
 
@@ -28,29 +16,30 @@ from ..rendered_info import RenderedInfo
 class Table(Renderable, RequiresNumbering):
     def __init__(self, parent: Parented, rows: int, cols: int, caption_info: CaptionInfo,
                  config: Md2GostConfig | None = None):
-        super().__init__(TABLE_CAPTION_CATEGORY, caption_info.unique_name if caption_info else None)
-        self._parent = parent
         self._config = config or get_default_config()
+        unique_name = caption_info.unique_name if caption_info and caption_info.unique_name else ""
+        super().__init__(self._config.caption_table, unique_name)
+        self._parent = parent
         self._caption_info = caption_info
         self._cols = cols
 
         sect = parent.part.document.sections[-1]
 
-        # todo: style inheritance
-        left_margin = Twips(int(parent.part.styles[STYLE_NORMAL_TABLE]._element.xpath("w:tblPr/w:tblCellMar/w:left")[0].attrib["{http://schemas.openxmlformats.org/wordprocessingml/2006/main}w"]))
-        right_margin = Twips(int(parent.part.styles[STYLE_NORMAL_TABLE]._element.xpath("w:tblPr/w:tblCellMar/w:right")[0].attrib["{http://schemas.openxmlformats.org/wordprocessingml/2006/main}w"]))
+        # table cell margins are taken from the template style
+        left_margin = Twips(int(parent.part.styles[self._config.style_normal_table]._element.xpath("w:tblPr/w:tblCellMar/w:left")[0].attrib["{http://schemas.openxmlformats.org/wordprocessingml/2006/main}w"]))
+        right_margin = Twips(int(parent.part.styles[self._config.style_normal_table]._element.xpath("w:tblPr/w:tblCellMar/w:right")[0].attrib["{http://schemas.openxmlformats.org/wordprocessingml/2006/main}w"]))
 
         self._table_width = sect.page_width - sect.left_margin - sect.right_margin + left_margin + right_margin
         self._number = "?"
 
-        self._rows: list[list[list[Paragraph]]] = [[[] for i in range(cols)] for j in range(rows)]
+        self._rows: list[list[list[Paragraph]]] = [[[] for _ in range(cols)] for _ in range(rows)]
 
     def add_paragraph_to_cell(self, row: int, col: int) -> Paragraph:
         paragraph = Paragraph(self._parent)
         paragraph.first_line_indent = 0
         paragraph._docx_paragraph.paragraph_format.space_before = 0
         paragraph._docx_paragraph.paragraph_format.space_after = 0
-        paragraph._docx_paragraph.paragraph_format.line_spacing = LINE_SPACING_SINGLE
+        paragraph._docx_paragraph.paragraph_format.line_spacing = self._config.line_spacing_single
         self._rows[row][col].append(paragraph)
         return paragraph
 
@@ -60,9 +49,11 @@ class Table(Renderable, RequiresNumbering):
     def render(self, previous_rendered: RenderedInfo, layout_state: LayoutState)\
             -> Generator[RenderedInfo | Renderable, None, None]:
         caption_rendered_infos = list(
-            Caption(self._parent, TABLE_CAPTION_CATEGORY, self._caption_info, self._number, True,
+            Caption(self._parent, self._config.caption_table, self._caption_info, self._number, True,
                    text_style=self._config.caption_table_style,
-                   space_before=TABLE_CAPTION_SPACE_BEFORE, space_after=TABLE_CAPTION_SPACE_AFTER)
+                   config=self._config,
+                   space_before=self._config.caption_table_space_before,
+                   space_after=self._config.caption_table_space_after)
             .render(previous_rendered, copy(layout_state))
         )
         layout_state.add_height(sum([info.height for info in caption_rendered_infos]))
@@ -70,7 +61,7 @@ class Table(Renderable, RequiresNumbering):
 
         docx_table = create_table(self._parent, 0, self._cols, self._table_width)
 
-        table_height = TABLE_BORDER_HEIGHT  # top border
+        table_height = self._config.table_border_height  # top border
 
         for row in self._rows:
             docx_row = create_table_row(docx_table)
@@ -82,24 +73,24 @@ class Table(Renderable, RequiresNumbering):
                     cell_layout_state = LayoutState(
                         layout_state.max_height, layout_state.max_width
                     )
-                    cell_layout_state.max_width = self._table_width / self._cols - CELL_OFFSET
+                    cell_layout_state.max_width = self._table_width / self._cols - self._config.table_cell_offset
                     for paragraph_rendered_info in paragraph.render(None, cell_layout_state):
                         docx_cell._element.append(paragraph_rendered_info.docx_element._element)
                         cell_height += paragraph_rendered_info.height
                     row_height = max(cell_height, row_height)
                 docx_row._element.append(docx_cell._element)
 
-            row_height += TABLE_BORDER_HEIGHT  # bottom row border
+            row_height += self._config.table_border_height  # bottom row border
 
             if row_height > layout_state.remaining_page_height:
                 table_rendered_info = RenderedInfo(docx_table, table_height)
                 yield table_rendered_info
 
-                table_height = TABLE_BORDER_HEIGHT  # top border
+                table_height = self._config.table_border_height  # top border
 
                 continuation_paragraph = Paragraph(self._parent)
-                continuation_paragraph.add_run(f"{TABLE_CONTINUATION_PREFIX} {self._number}")
-                continuation_paragraph.style = STYLE_CAPTION
+                continuation_paragraph.add_run(f"{self._config.table_continuation} {self._number}")
+                continuation_paragraph.style = self._config.style_caption
                 continuation_paragraph.first_line_indent = 0
                 continuation_paragraph.page_break_before = True
 
@@ -111,12 +102,8 @@ class Table(Renderable, RequiresNumbering):
 
                 docx_table = create_table(self._parent, 0, self._cols, self._table_width)
 
-                # previous = None
-
             docx_table._element.append(docx_row._element)
             layout_state.add_height(row_height)
             table_height += row_height
-
-            # previous = paragraph_rendered_info
 
         yield RenderedInfo(docx_table, table_height)

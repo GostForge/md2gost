@@ -8,7 +8,6 @@ from docx.oxml.ns import qn
 from docx.styles.style import _ParagraphStyle
 from docx.text.paragraph import Paragraph
 
-from .constants import BOTTOM_MARGIN_EFFECTIVE as BOTTOM_MARGIN
 from .config import Md2GostConfig, get_default_config
 from .debugger import Debugger
 from .layout_tracker import LayoutTracker
@@ -16,7 +15,7 @@ from .numberer import NumberingPreProcessor
 from .parser_ import Parser
 from .toc_processor import TocPreProcessor, TocPostProcessor
 from .renderer import Renderer
-from .util import merge_objects
+from .util import create_element, merge_objects
 
 
 class Converter:
@@ -27,10 +26,13 @@ class Converter:
                  debug: bool = False, config: Md2GostConfig | None = None):
         self._config = config or get_default_config()
         self._output_path = output_path
-        self._title_document: Document = docx.Document(title_path)
+        self._title_document: Document | None = docx.Document(title_path) if title_path else None
+        if title_path and title_pages < 1:
+            raise ValueError("title_pages должен быть >= 1, если указан title_path")
         self._title_pages = title_pages if title_path else 0
         self._document: Document = docx.Document(template_path)
         self._document._body.clear_content()
+        self._apply_document_config()
         self._debugger = Debugger(self._document) if debug else None
         self._parser = Parser(self._document, config=self._config)
         for path in input_paths:
@@ -43,7 +45,7 @@ class Converter:
             self._parser.parse(text, os.path.dirname(path))
 
         max_height = self._document.sections[-1].page_height - self._document.sections[0] \
-            .top_margin - BOTTOM_MARGIN  # - ((136 / 2) * (Pt(1)*72/96))  # todo add bottom margin detection with footer
+            .top_margin - self._config.bottom_margin_effective  # - ((136 / 2) * (Pt(1)*72/96))  # todo add bottom margin detection with footer
         max_width = self._document.sections[-1].page_width - self._document.sections[-1].left_margin \
             - self._document.sections[-1].right_margin
 
@@ -52,7 +54,25 @@ class Converter:
         if title_path:
             self.append_title()
 
+    def _apply_document_config(self):
+        for section in self._document.sections:
+            section.page_width = self._config.page_width_a4
+            section.page_height = self._config.page_height_a4
+            section.left_margin = self._config.page_margin_left
+            section.right_margin = self._config.page_margin_right
+            section.top_margin = self._config.page_margin_top
+            section.bottom_margin = self._config.page_margin_bottom
+
+        style_normal = self._document.styles[self._config.style_normal]
+        style_normal.font.name = self._config.font_main
+        style_normal.font.size = self._config.font_size_main
+        style_normal.paragraph_format.line_spacing = self._config.line_spacing
+        style_normal.paragraph_format.first_line_indent = self._config.first_line_indent
+
     def append_title(self):
+        if self._title_document is None:
+            return
+
         # copy element styles to element
         default_style_element = type("DefaultStyle", (), {})
         default_style_element.rPr = \
@@ -83,7 +103,7 @@ class Converter:
                 element.set(qn("r:embed"), r_id)
 
         # copy elements from title to document
-        self._document.add_section().is_linked_to_previous = True  # todo: copy footer
+        self._document.add_section().is_linked_to_previous = True  # keep footer linkage between sections
 
         self._document.sections[1].page_width = self._document.sections[0].page_width
         self._document.sections[1].page_height = self._document.sections[0].page_height
@@ -107,7 +127,16 @@ class Converter:
                 i += 1
 
         self._document.sections[-1].footer.is_linked_to_previous = False
-        self._document._body._element.xpath("w:sectPr/w:pgNumType")[0].set(qn("w:start"), str(self._title_pages+1))
+        section_props = self._document._body._element.xpath("w:sectPr")
+        if section_props:
+            section_prop = section_props[0]
+            page_number_nodes = section_prop.xpath("w:pgNumType")
+            if page_number_nodes:
+                page_number = page_number_nodes[0]
+            else:
+                page_number = create_element("w:pgNumType")
+                section_prop.append(page_number)
+            page_number.set(qn("w:start"), str(self._title_pages + 1))
 
     def convert(self):
         renderables = list(self._parser.get_rendered())

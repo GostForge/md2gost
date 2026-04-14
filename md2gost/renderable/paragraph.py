@@ -2,7 +2,7 @@ from typing import Generator
 
 from docx.table import Table
 from docx.oxml import CT_R
-from docx.shared import Length, Parented, RGBColor, Cm
+from docx.shared import Length, Parented, RGBColor
 from docx.text.paragraph import Paragraph as DocxParagraph
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.text.paragraph import Run as DocxRun
@@ -11,7 +11,7 @@ from docx.oxml.shared import qn
 
 from . import Renderable
 from .paragraph_sizer import ParagraphSizer
-from ..constants import STYLE_NORMAL, STYLE_HYPERLINK, SPACE_AFTER_TABLE
+from ..config import get_default_config
 from ..docx_elements import create_field
 from ..latex_math import latex_to_omml, inline_omml
 from ..layout_tracker import LayoutState
@@ -73,8 +73,9 @@ class Reference:
 class Paragraph(Renderable):
     def __init__(self, parent: Parented):
         self._parent = parent
+        self._config = get_default_config()
         self._docx_paragraph = DocxParagraph(create_element("w:p"), parent)
-        self._docx_paragraph.style = STYLE_NORMAL
+        self._docx_paragraph.style = self._config.style_normal
         self._references: list[Reference] = []
 
     def add_run(self, text: str, is_bold: bool = None, is_italic: bool = None, color: RGBColor = None,
@@ -99,14 +100,16 @@ class Paragraph(Renderable):
         self._references.append(Reference(unique_name))
         self._docx_paragraph._p.append(self._references[-1].element())
 
-    def add_link_url(self, url: str, style=STYLE_HYPERLINK):
-        link = Link(self._docx_paragraph, style)
+    def add_link_url(self, url: str, style: str | None = None):
+        link_style = self._config.style_hyperlink if style is None else style
+        link = Link(self._docx_paragraph, link_style)
         link.set_url(url)
         self._docx_paragraph._p.append(link.element)
         return link
 
-    def add_link_anchor(self, anchor: str, style=STYLE_HYPERLINK):
-        link = Link(self._docx_paragraph, style)
+    def add_link_anchor(self, anchor: str, style: str | None = None):
+        link_style = self._config.style_hyperlink if style is None else style
+        link = Link(self._docx_paragraph, link_style)
         link.set_anchor(anchor)
         self._docx_paragraph._p.append(link.element)
         return link
@@ -165,7 +168,7 @@ class Paragraph(Renderable):
 
         # add space before if the previous element is table
         if isinstance(previous_rendered, RenderedInfo) and isinstance(previous_rendered.docx_element, Table):
-            self._docx_paragraph.paragraph_format.space_before = SPACE_AFTER_TABLE  # todo: remake
+            self._docx_paragraph.paragraph_format.space_before = self._config.space_after_table  # todo: remake
 
         if self.page_break_before:
             layout_state.add_height(layout_state.remaining_page_height)

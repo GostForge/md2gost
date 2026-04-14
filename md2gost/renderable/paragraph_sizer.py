@@ -16,7 +16,7 @@ from docx.styles.style import _ParagraphStyle
 from PIL import Image, ImageDraw, ImageFont
 
 from .find_font import find_font
-from ..constants import LINE_HEIGHT_TIMES_14, LINE_HEIGHT_COURIER_12, SPACE_WIDTH_CORRECTION
+from ..config import get_default_config
 from ..util import merge_objects
 
 
@@ -53,10 +53,11 @@ class Font:
 
     def get_line_height(self) -> Length:
         # TODO: make it work for all fonts
+        config = get_default_config()
         if "Times" in str(self._face.family_name) and self._freetypefont.size == 14:
-            return LINE_HEIGHT_TIMES_14
+            return config.line_height_times_14
         if "Courier" in str(self._face.family_name) and self._freetypefont.size == 12:
-            return LINE_HEIGHT_COURIER_12
+            return config.line_height_courier_12
         else:
             return Pt(self._face.size.height / 64)
 
@@ -90,6 +91,7 @@ class ParagraphSizerResult:
 class ParagraphSizer:
     def __init__(self, paragraph: Paragraph, previous_paragraph: Paragraph | None, 
                  max_width: Length, tabs_size: Length = 0):  # todo: remove tabs_size and resolve tabs here
+        self._config = get_default_config()
         self.previous_paragraph = previous_paragraph
         self.max_width = max_width
         self.paragraph = paragraph
@@ -137,7 +139,7 @@ class ParagraphSizer:
         space_font = Font.from_signature(docx_font.name, docx_font.bold, docx_font.italic, docx_font.size.pt)
         space_width = space_font.get_text_width(" ")
         if not is_mono:
-            space_width *= SPACE_WIDTH_CORRECTION
+            space_width *= self._config.space_width_correction
 
         word_part = ""
         word_parts_widths = [0]

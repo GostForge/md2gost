@@ -1,10 +1,10 @@
 from typing import Generator
 
-from docx.shared import Parented, Pt
+from docx.shared import Parented
 from docx.text.paragraph import Paragraph as DocxParagraph
 
 from .paragraph_sizer import ParagraphSizer
-from ..constants import PAGE_BREAK_FONT_SIZE
+from ..config import get_default_config
 from ..layout_tracker import LayoutState
 from ..rendered_info import RenderedInfo
 from ..util import create_element
@@ -13,12 +13,13 @@ from .renderable import Renderable
 
 class PageBreak(Renderable):
     def __init__(self, parent: Parented):
+        self._config = get_default_config()
         self._docx_paragraph = DocxParagraph(create_element("w:p", [
             create_element("w:r", [
                 create_element("w:br", {"w:type": "page"})
             ])
         ]), parent)
-        self._docx_paragraph.runs[0].font.size = PAGE_BREAK_FONT_SIZE
+        self._docx_paragraph.runs[0].font.size = self._config.page_break_font_size
         self._docx_paragraph.paragraph_format.space_before = 0
         self._docx_paragraph.paragraph_format.space_after = 0
 

@@ -12,7 +12,6 @@ marko = "^2.0.0"
 freetype-py = "^2.4.0"
 pillow = "^10.0.0"
 matplotlib = { version = "3.7.2", platform = "!= linux" }
-requests = "^2.31.0"
 latex2mathml = "^3.76.0"
 pygments = "^2.16.1"
 fastapi = "^0.115.0"
@@ -20,6 +19,7 @@ uvicorn = { version = "^0.34.0", extras = ["standard"] }
 httpx = "^0.28.0"
 pydantic = "^2.10.0"
 python-multipart = "^0.0.20"
+pyyaml = "^6.0"
 
 
 [tool.poetry.group.dev.dependencies]

@@ -14,14 +14,14 @@ from .renderable import Renderable
 from ..rendered_info import RenderedInfo
 from .paragraph_sizer import ParagraphSizer
 from ..util import create_element
-from ..constants import (
-    STYLE_CAPTION, CAPTION_SEPARATOR, SPACE_BEFORE_CAPTION_AFTER_TABLE,
-    CAPTION_FONT_SIZE, ORPHAN_CONTROL_LINES,
-    CaptionTextStyle,
-    TABLE_CAPTION_CATEGORY, IMAGE_CAPTION_CATEGORY, LISTING_CAPTION_CATEGORY, EQUATION_CAPTION_CATEGORY,
-)
+from ..config import CaptionTextStyle
 
 from docx.shared import Length
+
+
+_ATTR_W_VAL = "w:val"
+_ELEM_FLD_CHAR = "w:fldChar"
+_ATTR_FLD_CHAR_TYPE = "w:fldCharType"
 
 
 @dataclass
@@ -30,34 +30,34 @@ class CaptionInfo:
     text: str | None
 
 
-def _make_rPr(bold: bool, italic: bool, underline: bool, sz_val: str):
+def _make_r_pr(bold: bool, italic: bool, underline: bool, sz_val: str):
     """Build a ``w:rPr`` element with bold / italic / size."""
-    rPr = create_element("w:rPr")
+    r_pr = create_element("w:rPr")
     if bold:
-        rPr.append(create_element("w:b"))
+        r_pr.append(create_element("w:b"))
     else:
-        rPr.append(create_element("w:b", {"w:val": "0"}))
+        r_pr.append(create_element("w:b", {_ATTR_W_VAL: "0"}))
     if italic:
-        rPr.append(create_element("w:i"))
+        r_pr.append(create_element("w:i"))
     else:
-        rPr.append(create_element("w:i", {"w:val": "0"}))
+        r_pr.append(create_element("w:i", {_ATTR_W_VAL: "0"}))
     if underline:
-        rPr.append(create_element("w:u", {"w:val": "single"}))
+        r_pr.append(create_element("w:u", {_ATTR_W_VAL: "single"}))
     else:
-        rPr.append(create_element("w:u", {"w:val": "none"}))
-    rPr.append(create_element("w:sz", {"w:val": sz_val}))
-    rPr.append(create_element("w:szCs", {"w:val": sz_val}))
-    return rPr
+        r_pr.append(create_element("w:u", {_ATTR_W_VAL: "none"}))
+    r_pr.append(create_element("w:sz", {_ATTR_W_VAL: sz_val}))
+    r_pr.append(create_element("w:szCs", {_ATTR_W_VAL: sz_val}))
+    return r_pr
 
 
 def _style_for_category(category: str, config: Md2GostConfig) -> CaptionTextStyle:
-    if category == TABLE_CAPTION_CATEGORY:
+    if category == config.caption_table:
         return config.caption_table_style
-    if category == IMAGE_CAPTION_CATEGORY:
+    if category == config.caption_image:
         return config.caption_image_style
-    if category == LISTING_CAPTION_CATEGORY:
+    if category == config.caption_listing:
         return config.caption_listing_style
-    if category == EQUATION_CAPTION_CATEGORY:
+    if category == config.caption_equation:
         return config.caption_equation_style
     return CaptionTextStyle.NONE
 
@@ -68,6 +68,7 @@ class Caption(Renderable):
                  is_bold: bool = None, is_italic: bool = None,
                  is_underline: bool = None,
                  text_style: CaptionTextStyle | None = None,
+                 config: Md2GostConfig | None = None,
                  space_before: Length = None, space_after: Length = None):
         """
         Args:
@@ -81,12 +82,12 @@ class Caption(Renderable):
         self._parent = parent
         self._before = before
         self._space_before = space_before
-        self._config = get_default_config()
+        self._config = config or get_default_config()
         self._docx_paragraph = DocxParagraph(create_element("w:p"), parent)
 
         uid = uuid4().hex
 
-        self._docx_paragraph.style = STYLE_CAPTION
+        self._docx_paragraph.style = self._config.style_caption
 
         # ГОСТ per-type spacing (default: inherit from style)
         if space_after is not None:
@@ -110,14 +111,14 @@ class Caption(Renderable):
         italic = bool(text_style & CaptionTextStyle.ITALIC)
         underline = bool(text_style & CaptionTextStyle.UNDERLINE)
         # half-points for raw XML runs (w:sz): Pt(12) = 24 hp
-        sz_val = str(int(CAPTION_FONT_SIZE.pt * 2))
+        sz_val = str(int(self._config.caption_font_size.pt * 2))
 
         # Первый run: "Категория "
         run_category = self._docx_paragraph.add_run(f"{category} ")
         run_category.bold = bold
         run_category.italic = italic
         run_category.underline = underline
-        run_category.font.size = CAPTION_FONT_SIZE
+        run_category.font.size = self._config.caption_font_size
 
         if caption_info and caption_info.unique_name:
             self._docx_paragraph._p.append(create_element("w:bookmarkStart", {
@@ -131,31 +132,31 @@ class Caption(Renderable):
         field_instr = f" SEQ {category} \\* ARABIC "
 
         # begin run
-        r_begin = create_element("w:r", [_make_rPr(bold, italic, underline, sz_val),
-                                          create_element("w:fldChar", {"w:fldCharType": "begin"})])
+        r_begin = create_element("w:r", [_make_r_pr(bold, italic, underline, sz_val),
+                          create_element(_ELEM_FLD_CHAR, {_ATTR_FLD_CHAR_TYPE: "begin"})])
         self._docx_paragraph._p.append(r_begin)
 
         # instrText run
         instr_elem = create_element("w:instrText", field_instr)
         instr_elem.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
-        r_instr = create_element("w:r", [_make_rPr(bold, italic, underline, sz_val), instr_elem])
+        r_instr = create_element("w:r", [_make_r_pr(bold, italic, underline, sz_val), instr_elem])
         self._docx_paragraph._p.append(r_instr)
 
         # separate run
-        r_sep = create_element("w:r", [_make_rPr(bold, italic, underline, sz_val),
-                                        create_element("w:fldChar", {"w:fldCharType": "separate"})])
+        r_sep = create_element("w:r", [_make_r_pr(bold, italic, underline, sz_val),
+                        create_element(_ELEM_FLD_CHAR, {_ATTR_FLD_CHAR_TYPE: "separate"})])
         self._docx_paragraph._p.append(r_sep)
 
         # result run (cached number value)
         self._numbering_run = create_element("w:r", [
-            _make_rPr(bold, italic, underline, sz_val),
+            _make_r_pr(bold, italic, underline, sz_val),
             create_element("w:t", str(number) if number else "?"),
         ])
         self._docx_paragraph._p.append(self._numbering_run)
 
         # end run
-        r_end = create_element("w:r", [_make_rPr(bold, italic, underline, sz_val),
-                                        create_element("w:fldChar", {"w:fldCharType": "end"})])
+        r_end = create_element("w:r", [_make_r_pr(bold, italic, underline, sz_val),
+                                        create_element(_ELEM_FLD_CHAR, {_ATTR_FLD_CHAR_TYPE: "end"})])
         self._docx_paragraph._p.append(r_end)
 
         if caption_info and caption_info.unique_name:
@@ -163,11 +164,11 @@ class Caption(Renderable):
                 "w:id": uid
             }))
         if caption_info and caption_info.text:
-            run_text = self._docx_paragraph.add_run(f"{CAPTION_SEPARATOR}{caption_info.text}")
+            run_text = self._docx_paragraph.add_run(f"{self._config.caption_separator}{caption_info.text}")
             run_text.bold = bold
             run_text.italic = italic
             run_text.underline = underline
-            run_text.font.size = CAPTION_FONT_SIZE
+            run_text.font.size = self._config.caption_font_size
 
     def center(self):
         self._docx_paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
@@ -176,7 +177,7 @@ class Caption(Renderable):
             "RenderedInfo | Renderable", None, None]:
         if previous_rendered and isinstance(previous_rendered.docx_element, Table) \
                 and not (layout_state.current_page_height == 0 and layout_state.page != 1):
-            self._docx_paragraph.paragraph_format.space_before = SPACE_BEFORE_CAPTION_AFTER_TABLE
+            self._docx_paragraph.paragraph_format.space_before = self._config.space_before_caption_after_table
         elif self._space_before is not None:
             self._docx_paragraph.paragraph_format.space_before = self._space_before
         else:
@@ -190,7 +191,7 @@ class Caption(Renderable):
         ).calculate_height()
 
         # if three more lines don't fit, move it to the next page (so there is no only caption on the end of the page)
-        if self._before and ((height_data.lines + ORPHAN_CONTROL_LINES - 1) * height_data.line_spacing + 1) * height_data.line_height \
+        if self._before and ((height_data.lines + self._config.orphan_control_lines - 1) * height_data.line_spacing + 1) * height_data.line_height \
                 > layout_state.remaining_page_height:
             self._docx_paragraph.paragraph_format.page_break_before = True
             self._docx_paragraph.paragraph_format.space_before = None

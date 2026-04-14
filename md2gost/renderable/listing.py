@@ -21,23 +21,20 @@ from ..docx_elements import create_table
 from ..layout_tracker import LayoutState
 from ..rendered_info import RenderedInfo
 from ..warnings_collector import add_warning
-from ..constants import (
-    LISTING_OFFSET,
-    LISTING_CAPTION_CATEGORY,
-    LISTING_CONTINUATION_PREFIX,
-    LISTING_BORDER_HEIGHT,
-    LISTING_PYGMENTS_STYLE,
-    LISTING_CAPTION_SPACE_BEFORE,
-    LISTING_CAPTION_SPACE_AFTER,
-    STYLE_CAPTION,
-    STYLE_CODE,
-    STYLE_NORMAL_TABLE,
-)
+
+
+LISTING_OFFSET = get_default_config().listing_offset
 
 
 class DocxParagraphPygmentsFormatter(Formatter):
-    def __init__(self, paragraphs: list[Paragraph], creator: Callable[[], Paragraph], **options):
-        Formatter.__init__(self, style=LISTING_PYGMENTS_STYLE, **options)
+    def __init__(
+        self,
+        paragraphs: list[Paragraph],
+        creator: Callable[[], Paragraph],
+        style_name: str,
+        **options,
+    ):
+        Formatter.__init__(self, style=style_name, **options)
         self._creator = creator
         self._paragraphs = paragraphs
         self._styles = {}
@@ -64,21 +61,22 @@ class DocxParagraphPygmentsFormatter(Formatter):
 class Listing(Renderable, RequiresNumbering):
     def __init__(self, parent, language: str, caption_info: CaptionInfo,
                  config: Md2GostConfig | None = None):
-        super().__init__(LISTING_CAPTION_CATEGORY, caption_info.unique_name if caption_info else None)
+        self._config = config or get_default_config()
+        unique_name = caption_info.unique_name if caption_info and caption_info.unique_name else ""
+        super().__init__(self._config.caption_listing, unique_name)
         self._caption_info = caption_info
         self._language = language
         self._parent = parent
-        self._config = config or get_default_config()
         self.paragraphs: list[Paragraph] = []
         self._number = None
 
     def _create_table(self, parent, width: Length):
-        # todo: style inheritance
+        # style values are taken from the template table style
         left_margin = Twips(int(
-            parent.part.styles[STYLE_NORMAL_TABLE]._element.xpath("w:tblPr/w:tblCellMar/w:left")[0].attrib[
+            parent.part.styles[self._config.style_normal_table]._element.xpath("w:tblPr/w:tblCellMar/w:left")[0].attrib[
                 "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}w"]))
         right_margin = Twips(int(
-            parent.part.styles[STYLE_NORMAL_TABLE]._element.xpath("w:tblPr/w:tblCellMar/w:right")[0].attrib[
+            parent.part.styles[self._config.style_normal_table]._element.xpath("w:tblPr/w:tblCellMar/w:right")[0].attrib[
                 "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}w"]))
 
         return create_table(parent, 1, 1, width + left_margin + right_margin)
@@ -86,13 +84,22 @@ class Listing(Renderable, RequiresNumbering):
     def set_text(self, text: str):
         def create_paragraph() -> Paragraph:
             paragraph = Paragraph(self._parent)
-            paragraph.style = STYLE_CODE
+            paragraph.style = self._config.style_code
             return paragraph
 
         text = text.removesuffix("\n")
 
-        if self._language and "SYNTAX_HIGHLIGHTING" in os.environ and os.environ["SYNTAX_HIGHLIGHTING"] == "1":
-            formatter = DocxParagraphPygmentsFormatter(self.paragraphs, lambda: create_paragraph())
+        syntax_highlighting_enabled = (
+            self._config.syntax_highlighting
+            or os.environ.get("SYNTAX_HIGHLIGHTING") == "1"
+        )
+
+        if self._language and syntax_highlighting_enabled:
+            formatter = DocxParagraphPygmentsFormatter(
+                self.paragraphs,
+                lambda: create_paragraph(),
+                self._config.listing_pygments_style,
+            )
             try:
                 highlight(text, get_lexer_by_name(self._language), formatter)
                 return
@@ -112,9 +119,11 @@ class Listing(Renderable, RequiresNumbering):
     def render(self, previous_rendered: RenderedInfo, layout_state: LayoutState)\
             -> Generator[RenderedInfo | Renderable, None, None]:
         caption_rendered_infos = list(
-            Caption(self._parent, LISTING_CAPTION_CATEGORY, self._caption_info, self._number, True,
+            Caption(self._parent, self._config.caption_listing, self._caption_info, self._number, True,
                    text_style=self._config.caption_listing_style,
-                   space_before=LISTING_CAPTION_SPACE_BEFORE, space_after=LISTING_CAPTION_SPACE_AFTER)
+                   config=self._config,
+                   space_before=self._config.caption_listing_space_before,
+                   space_after=self._config.caption_listing_space_after)
             .render(previous_rendered, copy(layout_state))
         )
         layout_state.add_height(sum([info.height for info in caption_rendered_infos]))
@@ -123,11 +132,11 @@ class Listing(Renderable, RequiresNumbering):
         table = self._create_table(self._parent, layout_state.max_width)
         previous = None
 
-        table_height = LISTING_BORDER_HEIGHT  # table borders, 4 eights of point for each border
+        table_height = self._config.listing_border_height  # table borders, 4 eights of point for each border
 
         # if first line doesn't fit move listing to the next page
         paragraph_layout_state = copy(layout_state)
-        paragraph_layout_state.max_width -= LISTING_OFFSET
+        paragraph_layout_state.max_width -= self._config.listing_offset
         paragraph_rendered_info = next(self.paragraphs[0].render(previous, paragraph_layout_state))
         if paragraph_rendered_info.height + table_height > layout_state.remaining_page_height:
             table_height += layout_state.remaining_page_height
@@ -135,18 +144,18 @@ class Listing(Renderable, RequiresNumbering):
 
         for paragraph in self.paragraphs:
             paragraph_layout_state = copy(layout_state)
-            paragraph_layout_state.max_width -= LISTING_OFFSET
+            paragraph_layout_state.max_width -= self._config.listing_offset
             paragraph_rendered_info = next(paragraph.render(previous, paragraph_layout_state))
 
-            if paragraph_rendered_info.height > layout_state.remaining_page_height:  # todo add before after
+            if paragraph_rendered_info.height > layout_state.remaining_page_height:
                 table_rendered_info = RenderedInfo(table, table_height)
                 yield table_rendered_info
 
-                table_height = LISTING_BORDER_HEIGHT  # table borders, 4 eights of point for each border
+                table_height = self._config.listing_border_height  # table borders, 4 eights of point for each border
 
                 continuation_paragraph = Paragraph(self._parent)
-                continuation_paragraph.add_run(f"{LISTING_CONTINUATION_PREFIX} {self._number}")
-                continuation_paragraph.style = STYLE_CAPTION
+                continuation_paragraph.add_run(f"{self._config.listing_continuation} {self._number}")
+                continuation_paragraph.style = self._config.style_caption
                 continuation_paragraph.first_line_indent = 0
                 continuation_paragraph.page_break_before = True
 
@@ -161,7 +170,7 @@ class Listing(Renderable, RequiresNumbering):
                 previous = None
 
                 paragraph_layout_state = copy(layout_state)
-                paragraph_layout_state.max_width -= LISTING_OFFSET
+                paragraph_layout_state.max_width -= self._config.listing_offset
                 paragraph_rendered_info = next(paragraph.render(previous, paragraph_layout_state))
 
             table._cells[0]._element.append(paragraph_rendered_info.docx_element._element)

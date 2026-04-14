@@ -2,12 +2,12 @@ from copy import copy
 from typing import Generator
 
 from docx.enum.text import WD_TAB_LEADER, WD_TAB_ALIGNMENT, WD_PARAGRAPH_ALIGNMENT
-from docx.shared import Parented, Cm
+from docx.shared import Parented
 from docx.text.run import Run
 
 from . import Paragraph
 from .renderable import Renderable
-from ..constants import TOC_ENTRY_SPACE_AFTER, TOC_LEVEL_INDENT
+from ..config import get_default_config
 from ..layout_tracker import LayoutState
 from ..rendered_info import RenderedInfo
 from ..util import create_element
@@ -43,6 +43,7 @@ class ToC(Renderable):
 
     def __init__(self, parent: Parented):
         self._parent = parent
+        self._config = get_default_config()
         self._paragraphs: list[Paragraph] = []
         self._numbering = [0 for _ in range(10)]
         pass
@@ -57,7 +58,7 @@ class ToC(Renderable):
         paragraph._docx_paragraph.paragraph_format.tab_stops.add_tab_stop(0, alignment=WD_TAB_ALIGNMENT.LEFT,
                                                           leader=WD_TAB_LEADER.SPACES)
         paragraph._docx_paragraph.paragraph_format.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
-        paragraph._docx_paragraph.paragraph_format.space_after = TOC_ENTRY_SPACE_AFTER
+        paragraph._docx_paragraph.paragraph_format.space_after = self._config.toc_entry_space_after
         paragraph.first_line_indent = 0
 
         hyperlink = paragraph.add_link_anchor(anchor, None)
@@ -65,7 +66,7 @@ class ToC(Renderable):
         self._numbering[level - 1] += 1
         for i in range(level, len(self._numbering)):
             self._numbering[i] = 0
-        hyperlink.add_run(TOC_LEVEL_INDENT * (level - 1))
+        hyperlink.add_run(self._config.toc_level_indent * (level - 1))
         if numbered:
             hyperlink.add_run(".".join([str(x) for x in self._numbering[:level]]) + ". ")
         # ГОСТ п. 3.4: основные разделы (level 1) — прописными буквами

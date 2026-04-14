@@ -7,11 +7,26 @@ from typing import Generator
 from docx.shared import Parented, RGBColor
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 
-from .renderable import *
-from .renderable import Renderable
+from .renderable import (
+    CaptionInfo,
+    Equation,
+    Heading,
+    Image,
+    Link,
+    List,
+    Listing,
+    Paragraph,
+    Renderable,
+    Table,
+    ToC,
+)
 from .config import Md2GostConfig, get_default_config
 from . import extended_markdown
 from .warnings_collector import add_warning
+
+
+_BLOCKED_PATH_TRAVERSAL = "__blocked_path_traversal__"
+_BLOCKED_EXTERNAL_REFERENCE = "__blocked_external_reference__"
 
 
 class RenderableFactory:
@@ -72,6 +87,7 @@ class RenderableFactory:
                     self._parent,
                     child.dest,
                     CaptionInfo(child.unique_name, child.title),
+                    source_path=getattr(child, "source_dest", child.dest),
                     config=self._config,
                 )
             else:
@@ -94,14 +110,24 @@ class RenderableFactory:
         listing = Listing(self._parent, marko_code_block.lang, caption_info, config=self._config)
 
         text = marko_code_block.children[0].children
+        source_extra = getattr(marko_code_block, "source_extra", marko_code_block.extra)
         if marko_code_block.extra:
-            try:
-                with open(marko_code_block.extra, encoding="utf-8") as f:
-                    text = f.read() + text
-            except FileNotFoundError:
-                msg = f"Файл с кодом не найден: {marko_code_block.extra}"
+            if marko_code_block.extra == _BLOCKED_EXTERNAL_REFERENCE:
+                msg = f"Внешние источники кода запрещены политикой безопасности: {source_extra}"
                 logging.warning(msg)
                 add_warning(msg)
+            elif marko_code_block.extra == _BLOCKED_PATH_TRAVERSAL:
+                msg = f"Доступ к файлам вне рабочей директории запрещён: {source_extra}"
+                logging.warning(msg)
+                add_warning(msg)
+            else:
+                try:
+                    with open(marko_code_block.extra, encoding="utf-8") as f:
+                        text = f.read() + text
+                except FileNotFoundError:
+                    msg = f"Файл с кодом не найден: {source_extra}"
+                    logging.warning(msg)
+                    add_warning(msg)
 
         listing.set_text(text)
         yield listing
@@ -112,12 +138,12 @@ class RenderableFactory:
 
     @create.register
     def _(self, marko_equation: extended_markdown.Equation, caption_info: CaptionInfo):
-        equation = Equation(self._parent, marko_equation.latex_equation, caption_info)
+        equation = Equation(self._parent, marko_equation.latex_equation, caption_info, config=self._config)
         yield equation
 
     @create.register
     def _(self, marko_list: extended_markdown.List, caption_info: CaptionInfo):
-        list_ = List(self._parent, marko_list.ordered)
+        list_ = List(self._parent, marko_list.ordered, config=self._config)
 
         def create_items_from_marko(marko_list_, level=1):
             for list_item in marko_list_.children:
