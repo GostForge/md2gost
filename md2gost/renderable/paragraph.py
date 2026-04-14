@@ -19,6 +19,9 @@ from ..util import create_element
 from ..rendered_info import RenderedInfo
 
 
+_DEFAULT_LINK_STYLE = object()
+
+
 class Link:
     def __init__(self, docx_paragraph: DocxParagraph, style: str | None):
         self._docx_paragraph = docx_paragraph
@@ -100,15 +103,15 @@ class Paragraph(Renderable):
         self._references.append(Reference(unique_name))
         self._docx_paragraph._p.append(self._references[-1].element())
 
-    def add_link_url(self, url: str, style: str | None = None):
-        link_style = self._config.style_hyperlink if style is None else style
+    def add_link_url(self, url: str, style: str | None | object = _DEFAULT_LINK_STYLE):
+        link_style = self._config.style_hyperlink if style is _DEFAULT_LINK_STYLE else style
         link = Link(self._docx_paragraph, link_style)
         link.set_url(url)
         self._docx_paragraph._p.append(link.element)
         return link
 
-    def add_link_anchor(self, anchor: str, style: str | None = None):
-        link_style = self._config.style_hyperlink if style is None else style
+    def add_link_anchor(self, anchor: str, style: str | None | object = _DEFAULT_LINK_STYLE):
+        link_style = self._config.style_hyperlink if style is _DEFAULT_LINK_STYLE else style
         link = Link(self._docx_paragraph, link_style)
         link.set_anchor(anchor)
         self._docx_paragraph._p.append(link.element)
