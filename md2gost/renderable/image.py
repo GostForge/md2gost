@@ -29,15 +29,38 @@ def _is_external_reference(path: str) -> bool:
     return bool(parsed.scheme) or path.startswith("//")
 
 
+def _collapse_media_prefix(path: str) -> str:
+    normalized = path
+    while normalized.lower().startswith("media/media/"):
+        normalized = normalized[len("media/"):]
+    return normalized
+
+
+def _sanitize_local_warning_path(path: str) -> str:
+    normalized = path.replace("\\", "/")
+
+    if os.path.isabs(normalized):
+        media_index = normalized.lower().find("/media/")
+        if media_index != -1:
+            normalized = normalized[media_index + 1:]
+        else:
+            normalized = os.path.basename(normalized) or normalized
+
+    normalized = normalized.lstrip("/").lstrip("./")
+    normalized = _collapse_media_prefix(normalized)
+    return normalized
+
+
 def _public_path_for_warning(path: str, source_path: str | None) -> str:
     if source_path:
-        return source_path.replace("\\", "/")
+        if _is_external_reference(source_path):
+            return source_path
+        return _sanitize_local_warning_path(source_path)
 
-    if path.startswith("http"):
+    if _is_external_reference(path):
         return path
 
-    normalized = path.replace("\\", "/")
-    return os.path.basename(normalized) or normalized
+    return _sanitize_local_warning_path(path)
 
 
 class Image(Renderable, RequiresNumbering):

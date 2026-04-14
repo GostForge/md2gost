@@ -54,6 +54,16 @@ class TestParserPathSecurity(unittest.TestCase):
         self.assertEqual(getattr(code_block, "source_extra"), "../../secrets.py")
         self.assertEqual(code_block.extra, "__blocked_path_traversal__")
 
+    def test_blocks_absolute_image_path_outside_workspace(self):
+        parsed = markdown.parse("![img](/tmp/tmpbzwqhz78/media/media/image2.png)\n")
+        paragraph = parsed.children[0]
+
+        Parser.resolve_paths(paragraph, "/tmp/workdir")
+
+        image = paragraph.children[0]
+        self.assertEqual(getattr(image, "source_dest"), "/tmp/tmpbzwqhz78/media/media/image2.png")
+        self.assertEqual(image.dest, "__blocked_path_traversal__")
+
 
 class TestAttachmentWarnings(unittest.TestCase):
     def setUp(self):
@@ -83,3 +93,33 @@ class TestAttachmentWarnings(unittest.TestCase):
         list(factory.create(code_block, None))
 
         self.assertTrue(any("Внешние источники кода запрещены" in msg for msg in get_warnings()))
+
+    def test_image_warning_does_not_expose_absolute_path(self):
+        document, max_height, max_width = _create_test_document()
+        image = Image(
+            document._body,
+            "__blocked_path_traversal__",
+            source_path="/tmp/tmpbzwqhz78/media/media/image2.png",
+        )
+
+        rendered = list(image.render(None, LayoutTracker(max_height, max_width).current_state))
+
+        self.assertEqual(rendered, [])
+        warnings = get_warnings()
+        self.assertTrue(any("media/image2.png" in msg for msg in warnings))
+        self.assertTrue(all("/tmp/" not in msg for msg in warnings))
+
+    def test_code_warning_does_not_expose_absolute_path(self):
+        template_path = Path(__file__).resolve().parents[1] / "md2gost" / "Template.docx"
+        template_doc = docx.Document(str(template_path))
+        factory = RenderableFactory(template_doc._body)
+        parsed = markdown.parse("```python /tmp/tmpbzwqhz78/media/media/code.py\nprint('ok')\n```\n")
+        code_block = parsed.children[0]
+        Parser.resolve_paths(code_block, "/tmp/workdir")
+
+        list(factory.create(code_block, None))
+
+        warnings = get_warnings()
+        self.assertTrue(any("Доступ к файлам вне рабочей директории запрещён" in msg for msg in warnings))
+        self.assertTrue(any("media/code.py" in msg for msg in warnings))
+        self.assertTrue(all("/tmp/" not in msg for msg in warnings))

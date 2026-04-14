@@ -1,9 +1,11 @@
 import logging
 import os
 from collections.abc import Generator
+from typing import cast
 from urllib.parse import urlparse
 
-from docx import Document
+from docx.document import Document as DocxDocument
+from docx.shared import Parented
 from marko.block import BlankLine, Paragraph, CodeBlock, FencedCode, \
     BlockElement
 from marko.inline import Image
@@ -24,11 +26,11 @@ _BLOCKED_EXTERNAL_REFERENCE = "__blocked_external_reference__"
 class Parser:
     """Parses given markdown string and returns Renderable elements"""
 
-    def __init__(self, document: Document, config: Md2GostConfig | None = None):
+    def __init__(self, document: DocxDocument, config: Md2GostConfig | None = None):
         self._document = document
         self._renderables = []
         self._config = config or get_default_config()
-        self._factory = RenderableFactory(self._document._body, config=self._config)
+        self._factory = RenderableFactory(cast(Parented, self._document._body), config=self._config)
         self._caption_info: CaptionInfo | None = None
 
     @staticmethod
@@ -46,14 +48,25 @@ class Parser:
         or ``None`` if the path attempts to escape (path-traversal).
         ``~`` (home-dir expansion) is intentionally NOT applied.
         """
-        # Strip leading slashes so os.path.join cannot ignore base_dir
-        cleaned = relative_path.lstrip("/").lstrip("\\")
-        resolved = os.path.normpath(os.path.join(base_dir, cleaned))
-        base = os.path.normpath(base_dir)
-        if not (resolved == base or resolved.startswith(base + os.sep)):
+        base = os.path.abspath(base_dir)
+
+        if os.path.isabs(relative_path):
+            resolved = os.path.abspath(relative_path)
+        else:
+            cleaned = relative_path.lstrip("/").lstrip("\\")
+            resolved = os.path.abspath(os.path.join(base, cleaned))
+
+        try:
+            stays_inside_base = os.path.commonpath([resolved, base]) == base
+        except ValueError:
+            stays_inside_base = False
+
+        if not stays_inside_base:
             logger.warning(
                 "Path traversal blocked: '%s' resolved to '%s' (base: %s)",
-                relative_path, resolved, base,
+                relative_path,
+                resolved,
+                base,
             )
             return None
         return resolved
@@ -97,7 +110,7 @@ class Parser:
         marko_code.extra = safe if safe is not None else _BLOCKED_PATH_TRAVERSAL
 
     @staticmethod
-    def resolve_paths(marko_element: BlockElement, relative_dir_path: str):
+    def resolve_paths(marko_element: object, relative_dir_path: str):
         """Resolves relative paths in Marko elements (with traversal protection)."""
         if isinstance(marko_element, Paragraph):
             Parser._resolve_image_paths(marko_element, relative_dir_path)
