@@ -26,6 +26,7 @@ class Equation(Renderable, RequiresNumbering):
         config: Md2GostConfig | None = None,
     ):
         self._config = config or get_default_config()
+        self._parent = parent
         unique_name = caption_info.unique_name if caption_info and caption_info.unique_name else ""
         super().__init__(self._config.caption_equation, unique_name)
         word_math = latex_to_omml(latex_formula)
@@ -82,7 +83,7 @@ class Equation(Renderable, RequiresNumbering):
     def render(self, previous_rendered: RenderedInfo, layout_state: LayoutState) -> Generator[
             "RenderedInfo | Renderable", None, None]:
         # ГОСТ п. 5.2: перед формулой — одна пустая строка
-        blank_before = DocxParagraph(create_element("w:p"), self._table._tbl.getparent() or self._table._tbl)
+        blank_before = DocxParagraph(create_element("w:p"), self._parent)
         blank_before.paragraph_format.space_before = 0
         blank_before.paragraph_format.space_after = 0
         blank_before.runs  # force init
@@ -97,7 +98,7 @@ class Equation(Renderable, RequiresNumbering):
         yield RenderedInfo(self._table, height)
 
         # ГОСТ п. 5.2: после формулы — одна пустая строка
-        blank_after = DocxParagraph(create_element("w:p"), self._table._tbl.getparent() or self._table._tbl)
+        blank_after = DocxParagraph(create_element("w:p"), self._parent)
         blank_after.paragraph_format.space_before = 0
         blank_after.paragraph_format.space_after = 0
         yield RenderedInfo(blank_after, blank_height)
