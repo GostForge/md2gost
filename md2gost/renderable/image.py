@@ -1,5 +1,4 @@
 import logging
-import os
 from copy import copy
 from typing import Generator
 from urllib.parse import urlparse
@@ -14,7 +13,7 @@ from .requires_numbering import RequiresNumbering
 from ..config import Md2GostConfig, get_default_config
 from ..layout_tracker import LayoutState
 from ..rendered_info import RenderedInfo
-from ..util import create_element
+from ..util import create_element, public_path_for_warning
 from ..warnings_collector import add_warning
 
 
@@ -27,40 +26,6 @@ def _is_external_reference(path: str) -> bool:
         return False
     parsed = urlparse(path)
     return bool(parsed.scheme) or path.startswith("//")
-
-
-def _collapse_media_prefix(path: str) -> str:
-    normalized = path
-    while normalized.lower().startswith("media/media/"):
-        normalized = normalized[len("media/"):]
-    return normalized
-
-
-def _sanitize_local_warning_path(path: str) -> str:
-    normalized = path.replace("\\", "/")
-
-    if os.path.isabs(normalized):
-        media_index = normalized.lower().find("/media/")
-        if media_index != -1:
-            normalized = normalized[media_index + 1:]
-        else:
-            normalized = os.path.basename(normalized) or normalized
-
-    normalized = normalized.lstrip("/").lstrip("./")
-    normalized = _collapse_media_prefix(normalized)
-    return normalized
-
-
-def _public_path_for_warning(path: str, source_path: str | None) -> str:
-    if source_path:
-        if _is_external_reference(source_path):
-            return source_path
-        return _sanitize_local_warning_path(source_path)
-
-    if _is_external_reference(path):
-        return path
-
-    return _sanitize_local_warning_path(path)
 
 
 class Image(Renderable, RequiresNumbering):
@@ -80,7 +45,7 @@ class Image(Renderable, RequiresNumbering):
         super().__init__(self._config.caption_image, unique_name)
         self._parent = parent
         self._caption_info = caption_info
-        warning_path = _public_path_for_warning(path, source_path)
+        warning_path = public_path_for_warning(source_path if source_path is not None else path)
         self._docx_paragraph = Paragraph(create_element("w:p"), parent)
         self._docx_paragraph.paragraph_format.space_before = 0
         self._docx_paragraph.paragraph_format.space_after = 0

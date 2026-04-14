@@ -1,5 +1,4 @@
 import logging
-import os
 from functools import singledispatchmethod
 from os import environ
 from typing import Generator
@@ -22,32 +21,12 @@ from .renderable import (
 )
 from .config import Md2GostConfig, get_default_config
 from . import extended_markdown
+from .util import public_path_for_warning
 from .warnings_collector import add_warning
 
 
 _BLOCKED_PATH_TRAVERSAL = "__blocked_path_traversal__"
 _BLOCKED_EXTERNAL_REFERENCE = "__blocked_external_reference__"
-
-
-def _public_path_for_warning(path: str) -> str:
-    if not isinstance(path, str):
-        path = str(path)
-
-    normalized = path.replace("\\", "/")
-    if "://" in normalized or normalized.startswith("//"):
-        return normalized
-
-    if os.path.isabs(normalized):
-        media_index = normalized.lower().find("/media/")
-        if media_index != -1:
-            normalized = normalized[media_index + 1:]
-        else:
-            normalized = os.path.basename(normalized) or normalized
-
-    normalized = normalized.lstrip("/").lstrip("./")
-    while normalized.lower().startswith("media/media/"):
-        normalized = normalized[len("media/"):]
-    return normalized
 
 
 class RenderableFactory:
@@ -131,7 +110,7 @@ class RenderableFactory:
         listing = Listing(self._parent, marko_code_block.lang, caption_info, config=self._config)
 
         text = marko_code_block.children[0].children
-        source_extra = _public_path_for_warning(getattr(marko_code_block, "source_extra", marko_code_block.extra))
+        source_extra = public_path_for_warning(getattr(marko_code_block, "source_extra", marko_code_block.extra))
         if marko_code_block.extra:
             if marko_code_block.extra == _BLOCKED_EXTERNAL_REFERENCE:
                 msg = f"Внешние источники кода запрещены политикой безопасности: {source_extra}"

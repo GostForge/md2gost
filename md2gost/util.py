@@ -1,6 +1,52 @@
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from lxml.etree import _Element
+import os
+import re
+from urllib.parse import urlparse
+
+
+_WINDOWS_ABS_RE = re.compile(r"^[A-Za-z]:/")
+
+
+def _collapse_media_prefix(path: str) -> str:
+    normalized = path
+    while normalized.lower().startswith("media/media/"):
+        normalized = normalized[len("media/"):]
+    return normalized
+
+
+def public_path_for_warning(path: object) -> str:
+    """Convert internal/absolute paths to user-facing safe relative labels.
+
+    Rules:
+    - Preserve external URLs (http/https/ftp/data/ws/wss and protocol-relative //).
+    - Normalize file:// and local absolute paths to safe labels.
+    - Collapse duplicated media/media prefixes.
+    """
+    normalized = str(path).replace("\\", "/")
+
+    if normalized.startswith("//"):
+        return normalized
+
+    parsed = urlparse(normalized)
+    if parsed.scheme and parsed.scheme not in {"file"}:
+        return normalized
+
+    if parsed.scheme == "file":
+        normalized = parsed.path or normalized
+
+    is_abs = os.path.isabs(normalized) or bool(_WINDOWS_ABS_RE.match(normalized))
+    if is_abs:
+        media_index = normalized.lower().find("/media/")
+        if media_index != -1:
+            normalized = normalized[media_index + 1:]
+        else:
+            normalized = os.path.basename(normalized) or normalized
+
+    normalized = normalized.lstrip("/").lstrip("./")
+    normalized = _collapse_media_prefix(normalized)
+    return normalized
 
 
 def create_element(name: str, *args: dict[str, str] | list[_Element] | str)\

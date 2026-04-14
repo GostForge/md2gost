@@ -123,3 +123,32 @@ class TestAttachmentWarnings(unittest.TestCase):
         self.assertTrue(any("Доступ к файлам вне рабочей директории запрещён" in msg for msg in warnings))
         self.assertTrue(any("media/code.py" in msg for msg in warnings))
         self.assertTrue(all("/tmp/" not in msg for msg in warnings))
+
+    def test_image_file_url_warning_does_not_expose_absolute_path(self):
+        document, max_height, max_width = _create_test_document()
+        image = Image(
+            document._body,
+            "__blocked_external_reference__",
+            source_path="file:///tmp/md2gost_lmosisgn/Aspose.Words.x.png",
+        )
+
+        rendered = list(image.render(None, LayoutTracker(max_height, max_width).current_state))
+
+        self.assertEqual(rendered, [])
+        warnings = get_warnings()
+        self.assertTrue(any("Aspose.Words.x.png" in msg for msg in warnings))
+        self.assertTrue(all("/tmp/" not in msg for msg in warnings))
+
+    def test_code_file_url_warning_does_not_expose_absolute_path(self):
+        template_path = Path(__file__).resolve().parents[1] / "md2gost" / "Template.docx"
+        template_doc = docx.Document(str(template_path))
+        factory = RenderableFactory(template_doc._body)
+        parsed = markdown.parse("```python file:///tmp/md2gost_lmosisgn/private.py\nprint('ok')\n```\n")
+        code_block = parsed.children[0]
+        Parser.resolve_paths(code_block, "/tmp/workdir")
+
+        list(factory.create(code_block, None))
+
+        warnings = get_warnings()
+        self.assertTrue(any("private.py" in msg for msg in warnings))
+        self.assertTrue(all("/tmp/" not in msg for msg in warnings))
