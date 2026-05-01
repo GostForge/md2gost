@@ -102,6 +102,16 @@ class RenderableFactory:
     @create.register
     def _(self, marko_heading: extended_markdown.Heading | extended_markdown.SetextHeading, caption_info: CaptionInfo):
         heading = Heading(self._parent, marko_heading.level, marko_heading.numbered)
+        
+        # Check if heading is empty and add warning
+        if not marko_heading.children or all(
+            not getattr(child, 'children', '')
+            for child in marko_heading.children
+        ):
+            msg = f"Заголовок уровня {marko_heading.level} не содержит текста"
+            logging.warning(msg)
+            add_warning(msg)
+        
         RenderableFactory._create_runs(heading, marko_heading.children)
         yield heading
 
