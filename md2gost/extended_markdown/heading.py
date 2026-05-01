@@ -20,8 +20,9 @@ class Heading(BlockElement):
     def __init__(self, match: Match[str]) -> None:
         self.level = len(match.group(1))
         inline_body = match.group(2).strip()
-        self.numbered = not (inline_body[0] == "*")
-        if not self.numbered:
+        # Check if inline_body is not empty before accessing first character
+        self.numbered = not (inline_body and inline_body[0] == "*")
+        if self.numbered is False and inline_body:
             inline_body = inline_body[1:]
         self.inline_body = inline_body
 

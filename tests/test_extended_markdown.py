@@ -39,6 +39,14 @@ class TestHeadingParsing(unittest.TestCase):
         self.assertIsInstance(result.children[0], RawText)
         self.assertEqual(result.children[0].children, "Мой подраздел")
 
+    def test_empty_heading(self):
+        """Test that empty heading (just #) doesn't cause IndexError"""
+        result = markdown.parse("# \n").children[0]
+        self.assertIsInstance(result, Heading)
+        self.assertEqual(result.level, 1)
+        self.assertTrue(result.numbered)
+        self.assertEqual(result.inline_body, "")
+
 
 class TestEquationParsing(unittest.TestCase):
     def test_single_line_equation(self):
