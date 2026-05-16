@@ -63,7 +63,8 @@ class ToC(Renderable):
 
         hyperlink = paragraph.add_link_anchor(anchor, None)
 
-        self._numbering[level - 1] += 1
+        if numbered:
+            self._numbering[level - 1] += 1
         for i in range(level, len(self._numbering)):
             self._numbering[i] = 0
         hyperlink.add_run(self._config.toc_level_indent * (level - 1))
