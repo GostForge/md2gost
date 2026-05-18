@@ -63,7 +63,7 @@ class ToC(Renderable):
 
         hyperlink = paragraph.add_link_anchor(anchor, None)
 
-        if numbered:
+        if numbered or title.lower().startswith("глава "):
             self._numbering[level - 1] += 1
         for i in range(level, len(self._numbering)):
             self._numbering[i] = 0
